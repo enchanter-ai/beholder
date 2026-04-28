@@ -146,6 +146,14 @@ tests/
 └── fixtures/mock-mcp-server.mjs        ← v0.2 — Node JSON-RPC server
 ```
 
+## What was removed at v0.2.1
+
+**Browser dashboard (Vite + Preact UI)** — dropped because terminal + VS Code surfaces are in-context where developers work; the dashboard required active browser-tab visiting and got ignored. The WebSocket broadcaster (`src/observability/dashboard-server.ts`) stays — VS Code's webview consumes it. Notifier stays. Bus, orchestrator, plugins, transports unchanged.
+
+Removed files:
+- `dashboard/` — Vite + Preact browser UI (App.tsx, components, lib/ws-client.ts, styles.css, index.html, vite.config.ts, etc.)
+- `scripts/run-dashboard.ts` — launcher that spawned Vite + the browser UI (217 LOC)
+
 ## v0.3 Follow-Ups (prioritized)
 
 1. **OAuth replay defense** — nonce + freshness store. Currently audience binding is the only check. Surface: `src/oauth/nonce-store.ts`.
