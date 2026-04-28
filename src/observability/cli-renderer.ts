@@ -193,10 +193,14 @@ export function topBorder(width: number, title: string, trailing = '', rounded =
 export function bottomBorder(width: number, pill = '', rounded = true): string {
   const bl = rounded ? BOX.bl : BOX.sbl;
   const br = rounded ? BOX.br : BOX.sbr;
+  // Visible char budget inside the corners.
+  // Layout:  bl + fill + pillPart + 2 trailing dashes + br = width
+  //          1  + fill + pillVis  + 2                  + 1  = width
+  //   ⇒ fill = width - pillVis - 4
   const inside = width - 2;
   const pillPart = pill ? ` ${pill} ` : '';
   const pillVis = visWidth(pillPart);
-  const fill = Math.max(1, inside - pillVis - 1);
+  const fill = Math.max(1, inside - pillVis - 2);
   return `${A.border}${bl}${A.reset}${A.border}${BOX.h.repeat(fill)}${A.reset}${pillPart}${A.border}${BOX.h}${BOX.h}${br}${A.reset}`;
 }
 
