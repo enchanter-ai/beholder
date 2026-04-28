@@ -8,9 +8,6 @@
     <img src="docs/hero.svg" alt="Enchanter — real-time MCP observability monitor" width="900">
   </a>
 </p>
-<p align="center">
-  <em>👆 click for the live interactive demo</em>
-</p>
 
 > Production-grade agent SDK with native Model Context Protocol support, hybrid orchestrator, and 10 capability plugins.
 
