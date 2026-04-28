@@ -47,8 +47,6 @@ import {
   trackAll,
   renderPlugins,
   renderGoldenSignals,
-  renderMascot,
-  MASCOT_TINY,
   topBorder,
   bottomBorder,
   frameRow,
@@ -237,11 +235,7 @@ function render(): void {
   const W = Math.max(60, Math.min(cols, 200));  // outer frame width
   const lines: string[] = [];
 
-  // ── Header (top border with embedded mascot + title + hints) ─────────────
-  // The mascot is a 4-row block-art: row 1 inline with the top border, rows
-  // 2-4 occupy the next three frame rows.  We render the top border with a
-  // shorter title slot, then frame rows containing the mascot tail + body.
-  const mascot = renderMascot(MASCOT_TINY);
+  // ── Header (top border with embedded title + mode + hints) ──────────────
   const modeWord = headerMode({
     paused: state.paused,
     pendingCount: state.pendingEvents.length,
@@ -252,12 +246,6 @@ function render(): void {
   const titleText = `Enchanter ─ ${modeWord}`;
   const hintsText = headerHints();
   lines.push(topBorder(W, titleText, hintsText));
-  // Three mascot tail rows inside the frame, left-pad 3, mascot color is
-  // baked in by renderMascot.  Rest of row is body padding.
-  for (let r = 1; r <= 3; r++) {
-    const m = mascot[r] ?? '';
-    lines.push(frameRow(W, `   ${m}`));
-  }
   lines.push(frameEmpty(W));
 
   // ── Golden-signal cards row (3 lines: top / mid / bot) ───────────────────
