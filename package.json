@@ -1,0 +1,71 @@
+{
+  "name": "enchanter",
+  "version": "0.2.0",
+  "description": "MCP client with hybrid orchestrator + event-bus architecture. Integrates 10 capability plugins (trust scoring, drift detection, security veto, code review, structural fingerprinting, cost attribution, git workflow) on every outbound tool call.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ai-agent",
+    "orchestrator",
+    "security",
+    "oauth",
+    "typescript"
+  ],
+  "homepage": "https://github.com/enchanter-ai/enchanter#readme",
+  "bugs": {
+    "url": "https://github.com/enchanter-ai/enchanter/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/enchanter-ai/enchanter.git",
+    "directory": "client/enchanter"
+  },
+  "license": "Apache-2.0",
+  "author": "The Enchanter Authors",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "IMPLEMENTATION_SUMMARY.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "vitest run tests/integration/",
+    "lint:check": "tsc --noEmit",
+    "demo:live": "tsx scripts/demo-live.ts",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/sdk-node": "^0.55.0",
+    "undici": "^7.0.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  },
+  "private": true,
+  "publishConfig": {
+    "access": "public",
+    "tag": "next"
+  }
+}
