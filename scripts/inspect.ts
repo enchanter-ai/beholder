@@ -39,6 +39,7 @@ import { subscribeNotifier }                   from '../src/observability/notifi
 
 import type { EnchantedEvent } from '../src/bus/event-types.js';
 import type { LifecyclePhase } from '../src/orchestration/request-context.js';
+import { homedir } from 'node:os';
 import {
   A,
   renderPhaseBar,
@@ -54,6 +55,8 @@ import {
   headerMode,
   headerHints,
   brandedTitle,
+  renderContextStrip,
+  tildify,
   footerPill,
   renderHelpLines,
   renderScrollIndicator,
@@ -150,6 +153,22 @@ interface InspectorState {
   errCount:        number;
   // LIVE-indicator blink phase (0..7, advanced ~250ms)
   blinkPhase:      number;
+  // Plugin enable/disable + keyboard selection (for the on/off toggle)
+  disabledPlugins: Set<keyof TuiCounters>;
+  selectedPlugin:  keyof TuiCounters | null;
+  // Workflow context — cwd + identity + active workflow tab
+  workspaceRoot:   string;
+  userIdentity:    string;
+  workflows:       Workflow[];
+  activeWorkflow:  number;  // index into workflows[]
+}
+
+interface Workflow {
+  id:       string;
+  label:    string;
+  cwd:      string;
+  startedMs:number;
+  status:   'running' | 'idle' | 'done' | 'failed';
 }
 
 function makeState(): InspectorState {
@@ -179,7 +198,29 @@ function makeState(): InspectorState {
     phaseStartMs:    0,
     errCount:        0,
     blinkPhase:      0,
+    disabledPlugins: new Set(),
+    selectedPlugin:  null,
+    workspaceRoot:   process.cwd(),
+    userIdentity:    detectUserIdentity(),
+    workflows:       [{
+      id:        'demo',
+      label:     'demo',
+      cwd:       process.cwd(),
+      startedMs: Date.now(),
+      status:    'idle',
+    }],
+    activeWorkflow:  0,
   };
+}
+
+/** Best-effort identification of who's running this inspector.
+ *  Source order: $CLAUDE_CODE_USER → $USER / $USERNAME → "anonymous". */
+function detectUserIdentity(): string {
+  const fromClaude = process.env['CLAUDE_CODE_USER'] ?? process.env['CLAUDE_USER'];
+  if (fromClaude && fromClaude.trim()) return fromClaude.trim();
+  const fromShell = process.env['USER'] ?? process.env['USERNAME'] ?? process.env['LOGNAME'];
+  if (fromShell && fromShell.trim()) return fromShell.trim();
+  return 'anonymous';
 }
 
 let state = makeState();
@@ -239,6 +280,13 @@ function render(): void {
   const W = Math.max(60, Math.min(cols, 200));  // outer frame width
   const lines: string[] = [];
 
+  // Responsive tiers — easier to reason about than scattered W >= N checks.
+  // ultra: <80 cols   (cards drop to 3, no events panel, no context strip)
+  // narrow: 80–99 cols (cards 4, no events panel, compact context)
+  // wide:  100+ cols   (cards 5, events panel, full context strip)
+  const tier = W >= 100 ? 'wide' : W >= 80 ? 'narrow' : 'ultra';
+  const wide = tier === 'wide';
+
   // ── Header (top border with embedded title + mode + hints) ──────────────
   const modeWord = headerMode({
     paused: state.paused,
@@ -249,12 +297,34 @@ function render(): void {
     blinkPhase: state.blinkPhase,
   });
   const titleText = `${brandedTitle()} ${A.label}─${A.reset} ${modeWord}`;
-  const hintsText = headerHints();
+  // Hints get truncated on narrow widths so they don't bury the mode.
+  const hintsText = tier === 'wide' ? headerHints()
+                  : tier === 'narrow' ? 'q quit · / filter · ?'
+                  : '';
   lines.push(topBorder(W, titleText, hintsText));
+
+  // ── Workspace context strip (cwd + user + workflow tabs) ────────────────
+  // Skipped on ultra-narrow terminals where every row is precious.
+  if (tier !== 'ultra') {
+    const tildeCwd = tildify(state.workspaceRoot, homedir());
+    const ctx = renderContextStrip({
+      cwd:       tildeCwd,
+      user:      state.userIdentity,
+      workflows: state.workflows.map((wf) => ({
+        id:     wf.id,
+        label:  wf.label,
+        status: wf.status,
+      })),
+      active:    state.activeWorkflow,
+      maxWidth:  W - 4,
+    });
+    lines.push(frameRow(W, ` ${ctx}`));
+  }
   lines.push(frameEmpty(W));
 
   // ── Golden-signal cards row (3 lines: top / mid / bot) ───────────────────
-  const cardCount = W >= 100 ? 5 : 4; // §2 responsive: drop card 5-6 < 100 cols
+  // Card count steps down with width: 5 / 4 / 3.
+  const cardCount = tier === 'wide' ? 5 : tier === 'narrow' ? 4 : 3;
   const cards = renderGoldenSignals(buildGoldenSignals(), cardCount);
   for (const c of cards) {
     lines.push(frameRow(W, `  ${c}`));
@@ -262,7 +332,6 @@ function render(): void {
   lines.push(frameEmpty(W));
 
   // ── Plugins | Events split ───────────────────────────────────────────────
-  const wide = W >= 100;
   // Inner panels: account for outer frame chrome + a 1-char gutter each side.
   // Total inside width = W - 2.  Reserve 2 for left+right gutter spaces.
   const innerW = W - 4;
@@ -286,6 +355,8 @@ function render(): void {
       state.sort,
       state.meta,
       pluginsW - 2,
+      state.disabledPlugins,
+      state.selectedPlugin,
     );
     const eventRows = buildEventLines(eventsW - 2);
 
@@ -421,7 +492,12 @@ function handleEvent(e: EnchantedEvent): void {
   }
 
   updatePluginMeta(e);
-  trackAll(state.counters, e);
+  // Skip counter updates for plugins the user has toggled off — the disabled
+  // row should freeze in place rather than silently keep accumulating.
+  const owner = topicToPlugin(e.topic);
+  if (!owner || !state.disabledPlugins.has(owner)) {
+    trackAll(state.counters, e);
+  }
   scheduleRender();
 }
 
@@ -628,6 +704,7 @@ function runSubprocess(scriptName: string): void {
   if (state.mode === 'running' || state.mode === 'subprocess') return;
   state.mode         = 'subprocess';
   state.subprocLabel = scriptName;
+  pushWorkflow(scriptName);
   scheduleRender();
 
   const child = spawn(
@@ -669,12 +746,42 @@ function runSubprocess(scriptName: string): void {
 
   (child.stdout as Readable).on('data', onData);
   (child.stderr as Readable).on('data', onData);
-  child.on('close', () => {
+  child.on('close', (code) => {
     if (buf.trim()) pushLine(buf);
     state.mode         = 'idle';
     state.currentLabel = `${scriptName} done`;
+    finishWorkflow(scriptName, code === 0 ? 'done' : 'failed');
     scheduleRender();
   });
+}
+
+/** Append (or refresh) a workflow tab and make it active. Older tabs stay
+ *  visible (capped at 5) so the user can see history. */
+function pushWorkflow(label: string): void {
+  const existing = state.workflows.findIndex((w) => w.label === label);
+  if (existing >= 0) {
+    const w = state.workflows[existing];
+    if (w) {
+      w.status    = 'running';
+      w.startedMs = Date.now();
+    }
+    state.activeWorkflow = existing;
+    return;
+  }
+  state.workflows.push({
+    id:        `${label}-${Date.now()}`,
+    label,
+    cwd:       process.cwd(),
+    startedMs: Date.now(),
+    status:    'running',
+  });
+  if (state.workflows.length > 5) state.workflows.shift();
+  state.activeWorkflow = state.workflows.length - 1;
+}
+
+function finishWorkflow(label: string, status: 'done' | 'failed'): void {
+  const w = state.workflows.find((wf) => wf.label === label);
+  if (w) w.status = status;
 }
 
 // ---------------------------------------------------------------------------
@@ -746,6 +853,15 @@ function togglePause(): void {
   scheduleRender();
 }
 
+/** Flip the disabled flag for one plugin. Display-level only — events still
+ *  arrive on the bus, but counters/sparklines for the disabled plugin pause
+ *  and the row dims so the on/off state is visible at a glance. */
+function togglePlugin(name: keyof TuiCounters): void {
+  if (state.disabledPlugins.has(name)) state.disabledPlugins.delete(name);
+  else                                  state.disabledPlugins.add(name);
+  scheduleRender();
+}
+
 function installKeyboard(): void {
   if (process.stdin.isTTY) {
     process.stdin.setRawMode(true);
@@ -794,6 +910,32 @@ function installKeyboard(): void {
 
     if (key === 'q' || key === '\x03') { gracefulExit(); return; }
     if (key === 'p') { togglePause(); return; }
+
+    // Plugin selection + on/off toggle.
+    //   1..9  → select that plugin (positions match ALL_PLUGINS order)
+    //   t      → toggle the currently-selected plugin on/off
+    //   T      → toggle ALL plugins
+    if (key >= '1' && key <= '9') {
+      const idx = parseInt(key, 10) - 1;
+      if (idx < PLUGIN_KEYS.length) {
+        state.selectedPlugin = PLUGIN_KEYS[idx] ?? null;
+        scheduleRender();
+      }
+      return;
+    }
+    if (key === 't') {
+      const sel = state.selectedPlugin;
+      if (sel) togglePlugin(sel);
+      return;
+    }
+    if (key === 'T') {
+      const allOff = PLUGIN_KEYS.every((k) => state.disabledPlugins.has(k));
+      if (allOff) state.disabledPlugins.clear();
+      else        for (const k of PLUGIN_KEYS) state.disabledPlugins.add(k);
+      scheduleRender();
+      return;
+    }
+
     if (key === '/') {
       state.inputMode   = 'filter';
       state.filterDraft = state.filter;
@@ -830,12 +972,24 @@ function installKeyboard(): void {
       state.currentLabel    = 'starting demo…';
       state.currentPhase    = null;
       state.completedPhases = new Set();
+      pushWorkflow('demo');
       scheduleRender();
-      runDemo().catch(() => {
-        state.mode = 'idle';
-        state.errCount += 1;
+      runDemo()
+        .then(() => finishWorkflow('demo', 'done'))
+        .catch(() => {
+          state.mode = 'idle';
+          state.errCount += 1;
+          finishWorkflow('demo', 'failed');
+          scheduleRender();
+        });
+      return;
+    }
+    if (key === '\t') {
+      // Tab cycles the active workflow tab.
+      if (state.workflows.length > 1) {
+        state.activeWorkflow = (state.activeWorkflow + 1) % state.workflows.length;
         scheduleRender();
-      });
+      }
       return;
     }
     if (key === 's') {

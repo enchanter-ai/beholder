@@ -815,34 +815,43 @@ const ALL_PLUGINS: Array<keyof TuiCounters> = [
 ];
 
 /**
- * Returns { text, accent } for the ONE key metric per plugin (Fix #3).
- * Accent is colored by SEMANTICS (red/amber/body), not plugin color.
+ * Per-plugin impact label — what the plugin actually does for the developer,
+ * not what it's named. People care about cost / security / drift, not "pech"
+ * or "naga". Plugin name moves to the right in dim text as a tag.
  */
+const PLUGIN_IMPACT: Record<keyof TuiCounters, string> = {
+  pech:   'cost',
+  emu:    'turns left',
+  hydra:  'security',
+  sylph:  'git ops',
+  djinn:  'intent',
+  lich:   'review',
+  naga:   'schema',
+  crow:   'trust',
+  gorgon: 'hotspots',
+};
+
+/** Returns { text, accent } for the ONE key metric per plugin.
+ *  Accent is colored by SEMANTICS (red/amber/body), not plugin color. */
 function pluginMetric(name: keyof TuiCounters, c: TuiCounters): { text: string; accent: string } {
   switch (name) {
     case 'pech': {
       const cost = c.pech.costUsd;
-      return {
-        text:   fmtCost(cost),
-        accent: cost > 1.0 ? A.amber : A.body,
-      };
+      return { text: fmtCost(cost), accent: cost > 1.0 ? A.amber : A.body };
     }
     case 'emu': {
       const e = c.emu;
-      if (e.runwayMean === null) {
-        return { text: '—', accent: A.body };
-      }
+      if (e.runwayMean === null) return { text: '—', accent: A.body };
       const lower = e.runwayMean - e.runwayCI;
       return {
-        text:   `${Math.round(e.runwayMean)} ± ${Math.round(e.runwayCI)} turns`,
+        text:   `${Math.round(e.runwayMean)} ± ${Math.round(e.runwayCI)}`,
         accent: lower < 5 ? A.amber : A.body,
       };
     }
     case 'hydra': {
       const h = c.hydra;
-      const last = h.lastVetoReason ? `  last: ${h.lastVetoReason.slice(0, 16)}` : '';
       return {
-        text:   h.vetoes > 0 ? `${h.vetoes} vetoes${last}` : '0 vetoes',
+        text:   h.vetoes > 0 ? `${h.vetoes} vetoes` : '0 vetoes',
         accent: h.vetoes > 0 ? A.red : A.body,
       };
     }
@@ -857,14 +866,14 @@ function pluginMetric(name: keyof TuiCounters, c: TuiCounters): { text: string; 
       const d = c.djinn;
       const drifting = d.driftCount > 0;
       return {
-        text:   drifting ? 'drift detected ⚠' : 'on task ✓',
+        text:   drifting ? 'drifting ⚠' : 'on task ✓',
         accent: drifting ? A.amber : A.body,
       };
     }
     case 'lich': {
       const l = c.lich;
       return {
-        text:   l.suspicions > 0 ? `${l.suspicions} flagged` : '0 clean ✓',
+        text:   l.suspicions > 0 ? `${l.suspicions} flagged` : 'clean ✓',
         accent: l.suspicions > 0 ? A.red : A.body,
       };
     }
@@ -876,17 +885,16 @@ function pluginMetric(name: keyof TuiCounters, c: TuiCounters): { text: string; 
       };
     }
     case 'crow': {
-      const cr = c.crow;
-      const m = cr.trustMean;
+      const m = c.crow.trustMean;
       return {
-        text:   m === null ? '— trust' : `${m.toFixed(2)} trust`,
+        text:   m === null ? '—' : m.toFixed(2),
         accent: m !== null && m < 0.5 ? A.amber : A.body,
       };
     }
     case 'gorgon': {
       const g = c.gorgon;
       const top = g.hotspots.length > 0
-        ? `${(g.hotspots[0]?.split('/').pop() ?? g.hotspots[0])} (top hotspot)`
+        ? (g.hotspots[0]?.split('/').pop() ?? g.hotspots[0] ?? '—')
         : '—';
       return { text: top, accent: A.body };
     }
@@ -894,8 +902,13 @@ function pluginMetric(name: keyof TuiCounters, c: TuiCounters): { text: string; 
 }
 
 /**
- * Render plugin rows for the inner panel. Each row fits within `width`
- * visible chars. Returns an array of pre-formatted, pre-padded lines.
+ * Render plugin rows for the inner panel. Each row leads with the impact
+ * label (cost / security / turns left / …), the metric value, the spark,
+ * and the plugin name as a dim trailing tag. Disabled plugins render in
+ * the dim/strike style so the toggle state is visible at a glance.
+ *
+ *   ●  cost          $0.42        ▁▂▃▄▅▆  pech
+ *   ●  security      0 vetoes     ▁▁▁▁▁▂  hydra
  */
 export function renderPlugins(
   counters: TuiCounters,
@@ -903,6 +916,8 @@ export function renderPlugins(
   sort: SidebarSort,
   meta: PluginActivityMeta,
   width: number,
+  disabled?: ReadonlySet<keyof TuiCounters>,
+  selected?: keyof TuiCounters | null,
 ): string[] {
   let order = [...ALL_PLUGINS];
   if (sort === 'name') {
@@ -913,17 +928,50 @@ export function renderPlugins(
     order.sort((a, b) => (meta.lastTs.get(b) ?? 0) - (meta.lastTs.get(a) ?? 0));
   }
 
+  // Decide column widths based on available space. Compact (<=46 ch) drops
+  // the trailing name tag; ultra-compact (<=34) also drops the spark.
+  const showName  = width >= 50;
+  const showSpark = width >= 36;
+  const impactW   = 11;   // longest impact label = "turns left"
+  const metricW   = Math.max(8, width - 2 /* "● " */ - impactW - 2 /* gap */
+    - (showSpark ? SPARKLINE_WIDTH + 2 : 0)
+    - (showName ? 8 : 0));
+
   const lines: string[] = [];
   for (const name of order) {
     const ring = sparks.get(name) ?? new SparkRing();
     const pluginColor = (A as Record<string, string>)[name] ?? A.body;
-    // Fix #2: dot, plugin name, and sparkline all use the plugin's truecolor
-    const dot     = `${pluginColor}·${A.reset}`;
-    const namePad = padVis(`${pluginColor}${name}${A.reset}`, 8);
-    const spark   = renderSparkline(ring.toArray(), SPARKLINE_WIDTH, pluginColor);
-    // Fix #3: one key metric, accent colored by semantics
+    const isOff = disabled?.has(name) ?? false;
+    const isSel = selected === name;
+
+    // Selection prefix: ▸ marker when this row is the keyboard target
+    const selMark = isSel ? `${A.amber}▸${A.reset}` : ' ';
+    const dot     = isOff
+      ? `${A.label}○${A.reset}`
+      : `${pluginColor}●${A.reset}`;
+    const impactRaw = PLUGIN_IMPACT[name];
+    const impactStr = isOff
+      ? `${A.label}${impactRaw}${A.reset}`
+      : `${A.bold}${pluginColor}${impactRaw}${A.reset}`;
+    const impactCol = padVis(impactStr, impactW);
+
     const { text: metricText, accent: metricAccent } = pluginMetric(name, counters);
-    const row = `${dot} ${namePad}${spark}  ${metricAccent}${metricText}${A.reset}`;
+    const metricStr = isOff
+      ? `${A.label}—${A.reset}`
+      : `${metricAccent}${metricText}${A.reset}`;
+    const metricCol = padVis(truncVis(metricStr, metricW), metricW);
+
+    const sparkStr = isOff
+      ? `${A.label}${'·'.repeat(SPARKLINE_WIDTH)}${A.reset}`
+      : renderSparkline(ring.toArray(), SPARKLINE_WIDTH, pluginColor);
+    const sparkCol = showSpark ? `  ${sparkStr}` : '';
+
+    const nameStr = isOff
+      ? `${A.label}${name}${A.reset}`
+      : `${A.dim}${pluginColor}${name}${A.reset}`;
+    const nameCol = showName ? `  ${padVis(nameStr, 6)}` : '';
+
+    const row = `${selMark}${dot} ${impactCol} ${metricCol}${sparkCol}${nameCol}`;
     lines.push(padVis(truncVis(row, width), width));
   }
   return lines;
@@ -985,6 +1033,85 @@ export function headerMode(opts: ModeBannerOpts): string {
 /** Pre-colored "Enchanter" wordmark — purple body color, bold. */
 export function brandedTitle(): string {
   return `${A.violet}${A.bold}Enchanter${A.reset}`;
+}
+
+// ---------------------------------------------------------------------------
+// Workspace context strip — cwd + user + workflow tabs. Rendered as one row
+// just under the header border so the developer sees what folder + identity
+// the inspector is operating against, and can switch between concurrent
+// workflows.
+// ---------------------------------------------------------------------------
+
+export interface WorkflowTab {
+  id:     string;
+  label:  string;
+  status: 'running' | 'idle' | 'done' | 'failed';
+}
+
+/** Replace the user's home directory prefix with `~` for compactness. */
+export function tildify(path: string, home?: string): string {
+  const h = home ?? '';
+  if (!h) return path;
+  // Match either / or \ separators; case-insensitive on Windows for safety.
+  if (path.toLowerCase().startsWith(h.toLowerCase())) {
+    const tail = path.slice(h.length);
+    return '~' + tail.replace(/\\/g, '/');
+  }
+  return path.replace(/\\/g, '/');
+}
+
+/** Truncate a path from the LEFT with ellipsis so the trailing folder is
+ *  always visible. Wider than `maxWidth` → "…/foo/bar". */
+export function shortenPath(path: string, maxWidth: number): string {
+  if (path.length <= maxWidth) return path;
+  return '…' + path.slice(path.length - maxWidth + 1);
+}
+
+/** Render the workspace + workflow context strip:
+ *    cwd · user dan · ▸demo │ stress │ red-team
+ *  Returns the pre-padded inner content for `frameRow`. */
+export function renderContextStrip(opts: {
+  cwd:       string;
+  user:      string;
+  workflows: ReadonlyArray<WorkflowTab>;
+  active:    number;
+  maxWidth:  number;
+}): string {
+  const { cwd, user, workflows, active, maxWidth } = opts;
+  // Left half: cwd + user
+  const cwdLabel  = `${A.label}cwd${A.reset}`;
+  const cwdValue  = `${A.cyan}${cwd}${A.reset}`;
+  const userLabel = `${A.label}user${A.reset}`;
+  const userValue = `${A.violet}${user}${A.reset}`;
+  const sep       = ` ${A.label}·${A.reset} `;
+  const left      = `${cwdLabel} ${cwdValue}${sep}${userLabel} ${userValue}`;
+
+  // Right half: workflow tabs
+  const tabs = workflows.map((wf, i) => {
+    const isActive = i === active;
+    const marker = isActive ? `${A.amber}▸${A.reset}` : ' ';
+    const statusGlyph = wf.status === 'running' ? `${A.green}●${A.reset}`
+                      : wf.status === 'failed'  ? `${A.red}✗${A.reset}`
+                      : wf.status === 'done'    ? `${A.label}✓${A.reset}`
+                      :                            ` `;
+    const label = isActive
+      ? `${A.bold}${A.body}${wf.label}${A.reset}`
+      : `${A.label}${wf.label}${A.reset}`;
+    return `${marker}${label}${statusGlyph ? ` ${statusGlyph}` : ''}`;
+  }).join(`${A.label} │ ${A.reset}`);
+
+  // Compose: left + variable padding + right, all clipped to maxWidth.
+  const leftVis  = visWidth(left);
+  const rightVis = visWidth(tabs);
+  const gap      = Math.max(2, maxWidth - leftVis - rightVis);
+  const composed = left + ' '.repeat(gap) + tabs;
+  if (visWidth(composed) <= maxWidth) return composed;
+  // Too wide — shorten the cwd, retry once.
+  const cwdRoom  = Math.max(8, maxWidth - rightVis - leftVis + cwd.length - 4);
+  const shortCwd = shortenPath(cwd, cwdRoom);
+  const left2    = `${cwdLabel} ${A.cyan}${shortCwd}${A.reset}${sep}${userLabel} ${userValue}`;
+  const composed2 = left2 + '  ' + tabs;
+  return truncVis(composed2, maxWidth);
 }
 
 /** Right-aligned trailing text in the header — keyboard hints. */
@@ -1074,6 +1201,10 @@ export function renderHelpLines(): string[] {
     row('x',            'run red-team script'),
     row('c',            'clear: reset filter, sort, scroll'),
     row('p',            'pause / resume event stream'),
+    row('1..9',         'select plugin row (1=pech, 2=emu, …)'),
+    row('t',            'toggle selected plugin on/off'),
+    row('T',            'toggle ALL plugins on/off'),
+    row('Tab',          'switch active workflow tab'),
     row('/',            'enter filter mode (substring on topic)'),
     row('Esc',          'cancel filter (or exit help)'),
     row('S',            'cycle sort: recent → name → veto'),
