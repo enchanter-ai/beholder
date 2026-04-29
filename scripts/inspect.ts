@@ -204,7 +204,10 @@ function makeState(): InspectorState {
     blinkPhase:      0,
     disabledPlugins: new Set(),
     selectedPlugin:  null,
-    watchedScope:    null,
+    // Default to the launch cwd so `enchanter` run from a project root shows
+    // that path immediately. spawnSession() overrides with the MCP server's
+    // sandbox once a demo session starts.
+    watchedScope:    process.cwd(),
     claudeAccount:   detectClaudeAccount(),
     workflows:       [{
       id:        'demo',

@@ -31,8 +31,13 @@
       "types": "./dist/index.d.ts"
     }
   },
+  "bin": {
+    "enchanter": "./bin/enchanter.mjs"
+  },
   "files": [
+    "bin",
     "dist",
+    "scripts",
     "src",
     "README.md",
     "IMPLEMENTATION_SUMMARY.md",
