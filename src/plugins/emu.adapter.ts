@@ -180,11 +180,15 @@ function makeRunwayEvent(
 // ── onPhase handlers ──────────────────────────────────────────────────────────
 
 function handlePostResponse(event: EnchantedEvent): PluginAck {
+  // Wire convention published by mcp-client and consumed by pech is
+  // `tokens: { input, output }`. Older test fixtures and the v0.2 emu stress
+  // scenario use `{ input_tokens, output_tokens }`. Read both — canonical first,
+  // legacy second — so emu observations are non-zero against real tool traffic.
   const tokens = event.payload['tokens'] as
-    | { input_tokens?: number; output_tokens?: number }
+    | { input?: number; output?: number; input_tokens?: number; output_tokens?: number }
     | undefined;
-  const input_tokens = tokens?.input_tokens ?? 0;
-  const output_tokens = tokens?.output_tokens ?? 0;
+  const input_tokens = tokens?.input ?? tokens?.input_tokens ?? 0;
+  const output_tokens = tokens?.output ?? tokens?.output_tokens ?? 0;
   const tool_call_id =
     (event.payload['tool_call_id'] as string | undefined) ?? event.correlation_id;
 
