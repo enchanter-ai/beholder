@@ -221,20 +221,43 @@ function handleTrustGate(event: EnchantedEvent): PluginAck {
   const n = observationCount(p);
   const entropy = betaEntropy(p);
 
+  // Always publish a trust-scored event so downstream consumers (the
+  // inspector, lich's review-ordering, observability metrics) see the
+  // running posterior on every trust-gate, not just at the review
+  // threshold. Without this, crow declares `emits: ['crow.trust.scored',
+  // 'crow.review.ordered']` but only the review path actually fires —
+  // a contract gap that left crow appearing silent in normal sessions.
+  const trustScoredEvent: EnchantedEvent = {
+    id: `${event.correlation_id}::crow-scored`,
+    correlation_id: event.correlation_id,
+    session_id: event.session_id,
+    phase: event.phase,
+    topic: 'crow.trust.scored',
+    source: 'crow',
+    budget_tier: event.budget_tier,
+    ts: Date.now(),
+    payload: {
+      server_id,
+      tool_name,
+      posterior_mean: mean,
+      observation_count: n,
+      entropy,
+    },
+  };
+
   if (!shouldTriggerReview(p)) {
-    // Cold start OR mean ≥ threshold — ack cleanly (or ack degraded if mean is
-    // low but we haven't accumulated enough observations yet).
     const degraded = mean < REVIEW_MEAN_THRESHOLD && n < REVIEW_MIN_OBSERVATIONS;
     return {
       status: 'ack',
       ...(degraded
         ? { degraded: true, reason: `crow: low mean ${mean.toFixed(3)} but cold-start (n=${n} < ${REVIEW_MIN_OBSERVATIONS})` }
         : {}),
+      derived_events: [trustScoredEvent],
     };
   }
 
-  // Review triggered: emit crow.review.ordered as a derived event.
-  const derivedEvent: EnchantedEvent = {
+  // Review triggered: ALSO emit crow.review.ordered.
+  const reviewEvent: EnchantedEvent = {
     id: `${event.correlation_id}::crow-review`,
     correlation_id: event.correlation_id,
     session_id: event.session_id,
@@ -257,6 +280,6 @@ function handleTrustGate(event: EnchantedEvent): PluginAck {
     status: 'ack',
     degraded: true,
     reason: `crow.review.ordered: ${server_id}.${tool_name} trust=${mean.toFixed(3)} n=${n}`,
-    derived_events: [derivedEvent],
+    derived_events: [trustScoredEvent, reviewEvent],
   };
 }
