@@ -55,7 +55,6 @@
     "lint:check": "tsc --noEmit",
     "demo:live": "tsx scripts/demo-live.ts",
     "prepack": "npm run build",
-    "inspect": "tsx scripts/inspect.ts",
     "stress": "tsx scripts/stress-plugins.ts",
     "red-team": "tsx scripts/red-team.ts"
   },
