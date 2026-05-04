@@ -1,0 +1,10 @@
+{"type":"runtime.metrics","time":1714435200.5,"open_sessions":3,"ongoing_tasks":5,"queued_tasks":2,"blocked_tasks":1,"code_written_lifetime_loc":12000,"code_modified_lifetime_loc":4500,"files_created_lifetime":80,"files_modified_lifetime":210,"tool_calls_lifetime":9000,"prs_created_lifetime":14,"tests_run_lifetime":320,"tests_passed_rate":0.94,"total_spend_lifetime":12.75,"plugin":"orchestrator"}
+{"type":"tool.call","time":1714435201.1,"tool":"read_file","payload":{"path":"src/router.ts","risk":"low"},"session_id":"sess-abc","task_id":"T-104","phase":"dispatch","plugin":"tool"}
+{"type":"hydra.veto","time":1714435202.0,"policy":"no-secrets","reason":"API key in diff","action":"block","severity":"critical","payload":{"file":"src/lib.rs","line":42},"session_id":"sess-abc","plugin":"hydra","phase":"pre-dispatch","workspace":"/repo","env":"dev"}
+{"type":"pech.ledger","time":1714435203.25,"payload":{"input_tokens":1200,"output_tokens":340,"cost_usd":0.012,"session_cost_usd":0.45,"daily_cost_usd":3.21},"session_id":"sess-abc","task_id":"T-104","phase":"post-response","plugin":"pech"}
+{"type":"task.updated","time":1714435204.0,"task_id":"T-104","session_id":"sess-abc","status":"running","intent":"refactor parser","file_or_area":"src/event.rs","phase":"dispatch","risk":"low","age_seconds":42}
+{"type":"code.modified","time":1714435205.0,"file":"src/router.ts","language":"typescript","lines_added":42,"lines_removed":11,"lines_modified":53,"session_id":"sess-abc","task_id":"T-104","plugin":"orchestrator"}
+{"type":"session.started","time":1714435206.0,"session_id":"sess-abc","plugin":"orchestrator"}
+{"type":"phase.entered","time":1714435207.0,"session_id":"sess-abc","phase":"dispatch","plugin":"orchestrator"}
+{"type":"plugin.loaded","time":1714435208.0,"plugin":"hydra"}
+{"type":"sylph.veto","time":1714435209.0,"session_id":"sess-abc","plugin":"sylph","phase":"trust-gate","severity":"high","policy":"force-push","reason":"force push to protected branch","action":"blocked"}

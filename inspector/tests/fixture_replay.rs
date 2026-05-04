@@ -72,3 +72,38 @@ async fn fixture_replay_populates_runtime_state() {
     // the plugin list).
     assert_eq!(app.plugins.len(), 10, "plugin roster shrank during replay");
 }
+
+/// Replay the TS bridge round-trip fixture and assert the inspector parses
+/// every line. The fixture is the canonical sample of what `Bridge` in
+/// `src/observability/bridge.ts` writes — if this fails, the TS wire
+/// format and the Rust event schema have drifted apart.
+#[tokio::test]
+async fn bridge_roundtrip() {
+    let fixture: PathBuf = [
+        env!("CARGO_MANIFEST_DIR"),
+        "tests",
+        "fixtures",
+        "bridge-roundtrip.jsonl",
+    ]
+    .iter()
+    .collect();
+
+    assert!(
+        fixture.is_file(),
+        "bridge-roundtrip fixture missing at {fixture:?}"
+    );
+
+    let mut transport = Transport::try_spawn(Source::File(fixture), 32)
+        .await
+        .expect("open bridge-roundtrip fixture");
+
+    let mut app = AppState::default();
+    let mut count = 0usize;
+    while let Some(event) = transport.recv().await {
+        app.apply(event);
+        count += 1;
+    }
+
+    // Fixture has exactly 10 lines, all well-formed.
+    assert_eq!(count, 10, "expected all 10 bridge fixture events to parse");
+}
