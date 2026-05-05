@@ -22,8 +22,10 @@ import { spawn, type ChildProcessByStdio } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import type { Readable } from 'node:stream';
 
+import { InProcessBus } from '../src/bus/pubsub.js';
 import { BusClient, DEFAULT_BROADCASTER_URL } from '../src/observability/bus-client.js';
-import type { EnchantedEvent } from '../src/bus/event-types.js';
+import { Bridge } from '../src/observability/bridge.js';
+import { parseBridgeEnv, makeSinkFromEnv } from '../src/observability/bridge-config.js';
 
 // ---------------------------------------------------------------------------
 // Argv: everything after `--` is the wrapped command
@@ -46,24 +48,50 @@ if (!cmd) process.exit(2);
 // ---------------------------------------------------------------------------
 // Bus wiring + event helper
 // ---------------------------------------------------------------------------
+// All events flow through an in-process bus. The legacy WS broadcaster is
+// attached as one subscriber (preserves existing inspector behavior); the
+// optional Bridge below is a second subscriber that ships JSONL to a sink
+// (stdout / TCP / file) when ENCHANTER_BRIDGE is set.
+const bus = new InProcessBus();
 const broadcaster = new BusClient(process.env['ENCHANTER_BUS_URL'] ?? DEFAULT_BROADCASTER_URL);
 broadcaster.connect();
+broadcaster.attach(bus);
+
+// ENCHANTER_BRIDGE env switch — see src/observability/bridge-config.ts.
+// stdout sink conflicts with logging-or-piping anything else through stdout
+// (the wrapped child's stdout is forwarded below); when 'stdout' is selected
+// we route diagnostics + the child's stdout to stderr to keep the wire pure.
+const bridgeSpec = parseBridgeEnv(process.env['ENCHANTER_BRIDGE']);
+const bridgeSink = makeSinkFromEnv(bridgeSpec);
+let bridge: Bridge | null = null;
+if (bridgeSink !== null) {
+  bridge = new Bridge(bus, bridgeSink);
+  bridge.start();
+}
+
+const stdoutSinkActive = bridgeSpec.kind === 'stdout';
+// Diagnostics always go to stderr — required when stdoutSinkActive (the
+// bridge owns stdout) and harmless otherwise. The wrapped child's stdout
+// is also re-routed to stderr below when the stdout sink is active.
+if (bridgeSpec.kind !== 'off') {
+  const desc =
+    bridgeSpec.kind === 'stdout' ? 'stdout'
+    : bridgeSpec.kind === 'tcp' ? `tcp://${bridgeSpec.host}:${bridgeSpec.port}`
+    : `file://${bridgeSpec.path}`;
+  process.stderr.write(`[enchanter run] bridge enabled: ${desc}\n`);
+}
 
 const correlationId = `run-${randomUUID().slice(0, 8)}`;
 
 function emit(topic: string, payload: Record<string, unknown>): void {
-  const e: EnchantedEvent = {
-    id:             randomUUID(),
+  void bus.publish(topic, {
     correlation_id: correlationId,
     session_id:     'run',
     phase:          'cross-session',
-    topic,
     source:         'run',
     budget_tier:    'HIGH',
-    ts:             Date.now(),
     payload,
-  };
-  broadcaster.send(e);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -173,7 +201,13 @@ function pipeStream(src: Readable, sink: NodeJS.WritableStream, state: StreamSta
   });
 }
 
-pipeStream(child.stdout, process.stdout, stdoutState);
+// When the stdout bridge sink is active, the child's stdout would corrupt
+// the JSONL wire format. Redirect it to stderr so the parent's stdout
+// stays exclusively the bridge channel.
+const childOutSink: NodeJS.WritableStream = stdoutSinkActive
+  ? process.stderr
+  : process.stdout;
+pipeStream(child.stdout, childOutSink, stdoutState);
 pipeStream(child.stderr, process.stderr, stderrState);
 
 // ---------------------------------------------------------------------------
@@ -208,11 +242,18 @@ child.on('close', (code, signal) => {
     elapsed_ms:    elapsedMs,
   });
 
-  // Give the broadcaster a tick to flush, then exit with the child's code.
+  // Give the broadcaster a tick to flush, then drain the bridge (so any
+  // buffered TCP/file lines reach the sink before exit), then exit with
+  // the child's code.
   setTimeout(() => {
-    try { broadcaster.close(); } catch { /* ignore */ }
-    if (signal) process.kill(process.pid, signal);
-    else        process.exit(code ?? 0);
+    void (async () => {
+      try { broadcaster.close(); } catch { /* ignore */ }
+      if (bridge) {
+        try { await bridge.stop(); } catch { /* ignore — best effort */ }
+      }
+      if (signal) process.kill(process.pid, signal);
+      else        process.exit(code ?? 0);
+    })();
   }, 50);
 });
 
@@ -231,5 +272,15 @@ function shutdown(code: number): void {
   closed = true;
   try { broadcaster.close(); } catch { /* ignore */ }
   try { child.kill(); }       catch { /* ignore */ }
+  // Best-effort bridge drain. If it doesn't resolve in 100 ms, we exit
+  // anyway — a hard error path shouldn't block on observability cleanup.
+  if (bridge) {
+    const exitTimer = setTimeout(() => process.exit(code), 100);
+    void bridge.stop().finally(() => {
+      clearTimeout(exitTimer);
+      process.exit(code);
+    });
+    return;
+  }
   process.exit(code);
 }

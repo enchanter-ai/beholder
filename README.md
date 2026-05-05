@@ -101,6 +101,18 @@ Spawns the official `@modelcontextprotocol/server-filesystem`, runs through all 
 
 Observability is the Rust terminal cockpit at [`inspector/`](inspector/) — single binary, reads the runtime's JSONL event stream from stdin / file / socket, renders 10 live views (overview, plugins, events, security, cost, drift, codebase, replay, runtime totals, active tasks). The earlier TS CLI inspector and VS Code extension were retired at v0.3 in favor of the terminal-first approach. The browser dashboard was intentionally dropped at v0.2.1 — see `IMPLEMENTATION_SUMMARY.md`.
 
+## Streaming events to the inspector
+
+The runtime supervisor (`scripts/run.ts`) ships every bus event as JSONL when `ENCHANTER_BRIDGE` is set. Default is off — unset env var preserves the existing WebSocket-broadcaster path. Three forms are accepted:
+
+```bash
+ENCHANTER_BRIDGE=stdout npx tsx scripts/run.ts -- npm test | enchanter           # pipe directly into the Rust TUI
+ENCHANTER_BRIDGE=tcp://127.0.0.1:7878 npx tsx scripts/run.ts -- npm test         # for an inspector listening on a socket
+ENCHANTER_BRIDGE=file:./run-2026-05-05.jsonl npx tsx scripts/run.ts -- npm test  # capture-to-replay
+```
+
+When `stdout` is selected, the supervisor re-routes the wrapped child's stdout to stderr so the JSONL wire stays uncorrupted.
+
 ## Architecture
 
 A thin per-request orchestrator owns the canonical request lifecycle. An in-process bus carries plugin findings as derived events. Required plugins (hydra, lich, naga, pech, sylph) fail-closed on missing ACK; advisory plugins (crow, djinn, emu, gorgon) fail-open with `degraded=true`. MCP spec primitives (Resources, Prompts, Tools, Sampling, Roots, Elicitation) are honored verbatim with OAuth 2.1 + PKCE + RFC 8707 audience binding for remote servers.
