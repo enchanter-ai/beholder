@@ -17,7 +17,14 @@
 import type { PluginAdapter } from './plugin-contract.js';
 import type { EnchantedEvent, PluginAck } from '../bus/event-types.js';
 import type { RequestContext } from '../orchestration/request-context.js';
-import { runSandboxedReview, type SandboxResult, type SandboxOptions } from './lich/sandbox.js';
+import {
+  runSandboxedReview,
+  runSandboxedToolCall,
+  type SandboxResult,
+  type SandboxOptions,
+  type ToolConfirmResult,
+  type ToolConfirmDifference,
+} from './lich/sandbox.js';
 
 // ---------------------------------------------------------------------------
 // Pattern catalogue — [author judgment] on the 5 pattern categories
@@ -183,18 +190,30 @@ const VETO_THRESHOLD = 3;
 // failures are advisory: the adapter continues to return the M1 verdict and
 // flags `degraded:true` on the ack.
 type SandboxRunner = (code: string, options: SandboxOptions) => Promise<SandboxResult>;
+type ToolConfirmRunner = (
+  toolName: string,
+  params: unknown,
+  originalResponse: unknown,
+  options: SandboxOptions,
+) => Promise<ToolConfirmResult>;
 
 interface LichConfig {
   m5_sandbox: boolean;
   m5_time_budget_ms: number;
   /** Test-only injection point. Defaults to runSandboxedReview. */
   m5_sandbox_runner: SandboxRunner;
+  /** v0.3.2 — MCP tool-call confirmation variant; default OFF. */
+  m5_tool_confirm: boolean;
+  /** Test-only injection point. Defaults to runSandboxedToolCall. */
+  m5_tool_confirm_runner: ToolConfirmRunner;
 }
 
 const config: LichConfig = {
   m5_sandbox: false,
   m5_time_budget_ms: 5_000,
   m5_sandbox_runner: runSandboxedReview,
+  m5_tool_confirm: false,
+  m5_tool_confirm_runner: runSandboxedToolCall,
 };
 
 /** Test/runtime hook to flip the M5 sandbox flag, tune its budget, or inject a stub runner. */
@@ -202,6 +221,8 @@ export function configureLich(patch: Partial<LichConfig>): void {
   if (patch.m5_sandbox !== undefined) config.m5_sandbox = patch.m5_sandbox;
   if (patch.m5_time_budget_ms !== undefined) config.m5_time_budget_ms = patch.m5_time_budget_ms;
   if (patch.m5_sandbox_runner !== undefined) config.m5_sandbox_runner = patch.m5_sandbox_runner;
+  if (patch.m5_tool_confirm !== undefined) config.m5_tool_confirm = patch.m5_tool_confirm;
+  if (patch.m5_tool_confirm_runner !== undefined) config.m5_tool_confirm_runner = patch.m5_tool_confirm_runner;
 }
 
 // ---------------------------------------------------------------------------
@@ -222,16 +243,25 @@ export const lichAdapter: PluginAdapter = {
     if (event.phase !== 'post-response') {
       return { status: 'ack' };
     }
-    const baseAck = scanToolSchema(event);
+    let ack = scanToolSchema(event);
 
-    if (!config.m5_sandbox) {
-      return baseAck;
+    if (config.m5_sandbox) {
+      const code = (event.payload as { code?: unknown }).code;
+      if (typeof code === 'string') {
+        ack = await augmentWithSandbox(ack, event, code);
+      }
     }
-    const code = (event.payload as { code?: unknown }).code;
-    if (typeof code !== 'string') {
-      return baseAck;
+
+    if (config.m5_tool_confirm && ack.status !== 'veto') {
+      const p = event.payload as { tool?: unknown; args?: unknown; response?: unknown };
+      const toolName = typeof p.tool === 'string' ? p.tool : null;
+      const hasResponse = 'response' in (event.payload as object);
+      if (toolName !== null && hasResponse) {
+        ack = await augmentWithToolConfirm(ack, event, toolName, p.args, p.response);
+      }
     }
-    return augmentWithSandbox(baseAck, event, code);
+
+    return ack;
   },
 };
 
@@ -282,6 +312,82 @@ async function augmentWithSandbox(
     ...baseAck,
     derived_events: derived,
   };
+}
+
+async function augmentWithToolConfirm(
+  baseAck: PluginAck,
+  event: EnchantedEvent,
+  toolName: string,
+  params: unknown,
+  originalResponse: unknown,
+): Promise<PluginAck> {
+  const result: ToolConfirmResult = await config.m5_tool_confirm_runner(
+    toolName,
+    params,
+    originalResponse,
+    { time_budget_ms: config.m5_time_budget_ms },
+  );
+
+  const confirmEvent: EnchantedEvent = {
+    id: `${event.correlation_id}::lich-tool-confirm`,
+    correlation_id: event.correlation_id,
+    session_id: event.session_id,
+    phase: event.phase,
+    topic: 'lich.sandbox.executed',
+    source: 'lich',
+    budget_tier: event.budget_tier,
+    ts: Date.now(),
+    payload: result.failed
+      ? { variant: 'tool-confirm', failed: true, reason: result.reason, elapsed_ms: result.elapsed_ms }
+      : {
+          variant: 'tool-confirm',
+          failed: false,
+          ok: result.ok,
+          differences: result.differences,
+          elapsed_ms: result.elapsed_ms,
+        },
+  };
+
+  const derived = [...(baseAck.derived_events ?? []), confirmEvent];
+
+  if (result.failed) {
+    // Fail-open: mark degraded, let the request through.
+    return {
+      ...baseAck,
+      status: baseAck.status,
+      degraded: true,
+      reason: baseAck.reason
+        ? `${baseAck.reason}; lich-tool-confirm-${result.reason}`
+        : `lich-tool-confirm-${result.reason}`,
+      derived_events: derived,
+    };
+  }
+
+  if (!result.ok) {
+    // Replay diverged from live response — high-severity ack with diff payload.
+    const diffSummary = summarizeDiff(result.differences);
+    return {
+      ...baseAck,
+      status: baseAck.status,
+      degraded: true,
+      reason: baseAck.reason
+        ? `${baseAck.reason}; lich-tool-confirm-divergence:${diffSummary}`
+        : `lich-tool-confirm-divergence:${diffSummary}`,
+      derived_events: derived,
+    };
+  }
+
+  return {
+    ...baseAck,
+    derived_events: derived,
+  };
+}
+
+function summarizeDiff(diffs: ReadonlyArray<ToolConfirmDifference>): string {
+  if (diffs.length === 0) return 'none';
+  const paths = diffs.slice(0, 3).map((d) => d.path.join('.') || '<root>');
+  const tail = diffs.length > 3 ? `+${diffs.length - 3}` : '';
+  return `${diffs.length} path(s): ${paths.join(',')}${tail}`;
 }
 
 function scanToolSchema(event: EnchantedEvent): PluginAck {

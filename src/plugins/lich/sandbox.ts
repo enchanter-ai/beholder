@@ -44,6 +44,34 @@ export interface SandboxFailure {
 
 export type SandboxResult = SandboxSuccess | SandboxFailure;
 
+// ---------------------------------------------------------------------------
+// Tool-call confirmation (v0.3.2)
+// ---------------------------------------------------------------------------
+
+/** A single structural difference between original and replayed responses. */
+export interface ToolConfirmDifference {
+  /** JSON-pointer-shaped path (string + numeric index keys) to the diverging value. */
+  readonly path: ReadonlyArray<string | number>;
+  readonly original: unknown;
+  readonly replayed: unknown;
+}
+
+export interface ToolConfirmSuccess {
+  readonly failed: false;
+  readonly ok: boolean;
+  readonly differences: ReadonlyArray<ToolConfirmDifference>;
+  readonly elapsed_ms: number;
+}
+
+export interface ToolConfirmFailure {
+  readonly failed: true;
+  readonly reason: SandboxFailReason;
+  readonly detail?: string;
+  readonly elapsed_ms: number;
+}
+
+export type ToolConfirmResult = ToolConfirmSuccess | ToolConfirmFailure;
+
 const DEFAULT_TIME_BUDGET_MS = 5_000;
 const DEFAULT_MEMORY_BUDGET_MB = 128;
 
@@ -56,10 +84,16 @@ function workerPath(): string {
 }
 
 interface WorkerReadyMessage { kind: 'ready' }
-interface WorkerReviewSuccess { kind: 'reply'; ok: true; result: { findings: SandboxFinding[]; score: number } }
-interface WorkerReviewError { kind: 'reply'; ok: false; error: string }
+interface WorkerReviewSuccess { ok: true; result: { findings: SandboxFinding[]; score: number } }
+interface WorkerReviewError { ok: false; error: string }
 type WorkerReply = WorkerReviewSuccess | WorkerReviewError;
-type WorkerMessage = WorkerReadyMessage | WorkerReply;
+
+interface WorkerToolConfirmSuccess {
+  ok: true;
+  result: { matches: boolean; differences: ToolConfirmDifference[]; replayed: unknown };
+}
+interface WorkerToolConfirmError { ok: false; error: string }
+type WorkerToolConfirmReply = WorkerToolConfirmSuccess | WorkerToolConfirmError;
 
 function isReadyMessage(v: unknown): v is WorkerReadyMessage {
   return typeof v === 'object' && v !== null && (v as { kind?: unknown }).kind === 'ready';
@@ -69,6 +103,19 @@ function isReplyMessage(v: unknown): v is WorkerReply {
   if (typeof v !== 'object' || v === null) return false;
   const o = v as { ok?: unknown };
   return o.ok === true || o.ok === false;
+}
+
+function isToolConfirmReply(v: unknown): v is WorkerToolConfirmReply {
+  if (typeof v !== 'object' || v === null) return false;
+  const o = v as { ok?: unknown; result?: unknown };
+  if (o.ok === false) return true;
+  if (o.ok !== true) return false;
+  const r = o.result as { matches?: unknown; differences?: unknown } | undefined;
+  return (
+    typeof r === 'object' && r !== null &&
+    typeof r.matches === 'boolean' &&
+    Array.isArray(r.differences)
+  );
 }
 
 export async function runSandboxedReview(
@@ -190,6 +237,147 @@ export async function runSandboxedReview(
           failed: false,
           findings: raw.result.findings,
           score: raw.result.score,
+          elapsed_ms: Date.now() - start,
+        });
+      } else {
+        finish({
+          failed: true,
+          reason: 'worker-error',
+          detail: raw.error,
+          elapsed_ms: Date.now() - start,
+        });
+      }
+    });
+  });
+}
+
+/**
+ * v0.3.2 — MCP TOOL-CALL CONFIRMATION variant. Re-execute (or replay against a
+ * mock transport) the tool call inside a forked worker, then structurally diff
+ * the replay output against the live `originalResponse`. The v0.3.2 stub uses
+ * mock-transport replay (see sandbox-worker.mjs `mockReplay`) since the
+ * client-side runtime can't re-spawn an arbitrary MCP server. Real-server
+ * replay is v0.3.3 scope. Same time/memory budgets and failure-shape contract
+ * as runSandboxedReview — never throws to the caller.
+ */
+export async function runSandboxedToolCall(
+  toolName: string,
+  params: unknown,
+  originalResponse: unknown,
+  options: SandboxOptions = {},
+): Promise<ToolConfirmResult> {
+  const start = Date.now();
+  const time_budget_ms = options.time_budget_ms ?? DEFAULT_TIME_BUDGET_MS;
+  const memory_budget_mb = options.memory_budget_mb ?? DEFAULT_MEMORY_BUDGET_MB;
+
+  let child: ChildProcess;
+  try {
+    child = fork(workerPath(), [], {
+      silent: true,
+      env: { PATH: process.env['PATH'] ?? '' },
+      execArgv: [
+        `--max-old-space-size=${memory_budget_mb}`,
+        '--no-warnings',
+      ],
+    });
+  } catch (err) {
+    return {
+      failed: true,
+      reason: 'spawn-error',
+      detail: err instanceof Error ? err.message : String(err),
+      elapsed_ms: Date.now() - start,
+    };
+  }
+
+  return new Promise<ToolConfirmResult>((resolvePromise) => {
+    let settled = false;
+    const finish = (r: ToolConfirmResult): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (!child.killed) {
+        try { child.kill('SIGKILL'); } catch { /* ignore */ }
+      }
+      resolvePromise(r);
+    };
+
+    const timer = setTimeout(() => {
+      finish({
+        failed: true,
+        reason: 'timeout',
+        detail: `wall-clock budget ${time_budget_ms}ms exceeded`,
+        elapsed_ms: Date.now() - start,
+      });
+    }, time_budget_ms);
+
+    child.on('error', (err) => {
+      finish({
+        failed: true,
+        reason: 'spawn-error',
+        detail: err.message,
+        elapsed_ms: Date.now() - start,
+      });
+    });
+
+    child.on('exit', (code, signal) => {
+      if (settled) return;
+      finish({
+        failed: true,
+        reason: 'worker-error',
+        detail: `worker exited code=${code} signal=${signal} before responding`,
+        elapsed_ms: Date.now() - start,
+      });
+    });
+
+    let ready = false;
+    child.on('message', (raw: unknown) => {
+      if (isReadyMessage(raw)) {
+        ready = true;
+        try {
+          child.send({
+            kind: 'tool-confirm',
+            toolName,
+            params,
+            originalResponse,
+            crash: options._force_crash === true,
+            spin: options._force_spin === true,
+          });
+        } catch (err) {
+          finish({
+            failed: true,
+            reason: 'worker-error',
+            detail: err instanceof Error ? err.message : String(err),
+            elapsed_ms: Date.now() - start,
+          });
+        }
+        return;
+      }
+
+      if (!isToolConfirmReply(raw)) {
+        finish({
+          failed: true,
+          reason: 'bad-response',
+          detail: 'worker sent unrecognized IPC message',
+          elapsed_ms: Date.now() - start,
+        });
+        return;
+      }
+
+      if (!ready) {
+        finish({
+          failed: true,
+          reason: 'bad-response',
+          detail: 'worker reply before ready signal',
+          elapsed_ms: Date.now() - start,
+        });
+        return;
+      }
+
+      if (raw.ok === true) {
+        finish({
+          failed: false,
+          ok: raw.result.matches,
+          differences: raw.result.differences,
           elapsed_ms: Date.now() - start,
         });
       } else {
