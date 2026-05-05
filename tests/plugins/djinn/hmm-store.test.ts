@@ -309,8 +309,11 @@ describe('djinn adapter — HMM persistence across reconfigure', () => {
     // Default state — no configureDjinn call. Anchor + drift work, no file I/O.
     const sessionId = 'in-memory-session';
     clearAnchor(sessionId);
-    await runAnchor(sessionId, 'Anchor prompt');
-    const result = await runPostSession(sessionId, 'Different topic prompt');
+    await runAnchor(sessionId, 'Add dark-mode support with a11y keyboard-trap tests');
+    const result = await runPostSession(
+      sessionId,
+      'Configure CI pipeline to deploy docker on merge',
+    );
     expect(result.hmm_state).toBeDefined();
     // No file should have been created in tmpDir.
     expect(existsSync(join(tmpDir, 'should-not-exist.jsonl'))).toBe(false);
