@@ -16,6 +16,11 @@ import type { PluginAdapter } from './plugin-contract.js';
 import type { EnchantedEvent, PluginAck } from '../bus/event-types.js';
 import type { RequestContext } from '../orchestration/request-context.js';
 import { IntentHmm, type HmmStep } from './djinn/hmm.js';
+import {
+  InMemoryHmmStore,
+  PersistentHmmStore,
+  type HmmStore,
+} from './djinn/hmm-store.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -93,11 +98,49 @@ const ANCHORS = new Map<string, SessionAnchor>();
 
 const HMMS = new Map<string, IntentHmm>();
 
-/** Internal: get-or-create the per-session HMM. Exposed for tests via clearAnchor. */
+// ---------------------------------------------------------------------------
+// HMM persistence (v0.4 carry-over #3)
+// Default: in-memory, back-compat with v0.3.1. configureDjinn({ hmm_store_path })
+// flips to a JSONL-backed store so forward state survives restart. See
+// src/plugins/djinn/hmm-store.ts for the persistence format.
+// ---------------------------------------------------------------------------
+
+let _hmmStore: HmmStore = new InMemoryHmmStore();
+
+export interface DjinnConfig {
+  /** Absolute path to the JSONL HMM-state log. Absent → in-memory only. */
+  readonly hmm_store_path?: string;
+}
+
+/**
+ * Configure the djinn adapter. Call once at enchanter startup; safe to call
+ * again (e.g., in tests) — re-configuring with a different path swaps the
+ * store and replays from the new file.
+ */
+export function configureDjinn(config: DjinnConfig): void {
+  if (config.hmm_store_path !== undefined) {
+    _hmmStore = new PersistentHmmStore(config.hmm_store_path);
+  } else {
+    _hmmStore = new InMemoryHmmStore();
+  }
+  // Drop any in-memory HMMs from a prior config — next getOrCreateHmm()
+  // hydrates fresh from the new store.
+  HMMS.clear();
+}
+
+/** Test seam: reset the store back to in-memory + clear all HMMs. */
+export function resetDjinnStore(): void {
+  _hmmStore = new InMemoryHmmStore();
+  HMMS.clear();
+}
+
+/** Internal: get-or-create the per-session HMM. Hydrates from the store on
+    first access; subsequent updates persist back. */
 function getOrCreateHmm(session_id: string): IntentHmm {
   let h = HMMS.get(session_id);
   if (!h) {
-    h = new IntentHmm();
+    const snap = _hmmStore.load(session_id);
+    h = snap ? IntentHmm.fromSnapshot(snap) : new IntentHmm();
     HMMS.set(session_id, h);
   }
   return h;
@@ -116,6 +159,7 @@ export function getAnchor(session_id: string): SessionAnchor | undefined {
 export function clearAnchor(session_id: string): void {
   ANCHORS.delete(session_id);
   HMMS.delete(session_id);
+  _hmmStore.clear(session_id);
 }
 
 // ---------------------------------------------------------------------------
@@ -186,7 +230,12 @@ function handlePostSessionPhase(event: EnchantedEvent): PluginAck {
   // sync with every turn.
   let hmmStep: HmmStep | undefined;
   if (d2Enabled) {
-    hmmStep = getOrCreateHmm(session_id).update(ratio);
+    const hmm = getOrCreateHmm(session_id);
+    hmmStep = hmm.update(ratio);
+    // Persist after every update so a restart between turns resumes mid-state.
+    // The store is in-memory by default (no I/O); persistent only when
+    // configureDjinn({ hmm_store_path }) wired a JSONL log.
+    _hmmStore.save(session_id, hmm.serialize());
   }
 
   if (ratio >= DRIFT_THRESHOLD) {

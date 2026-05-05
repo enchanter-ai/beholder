@@ -50,6 +50,27 @@ export interface HmmStep {
   readonly observation: Observation;
 }
 
+/**
+ * Serializable snapshot of an `IntentHmm`'s forward state. The transition
+ * matrix and emission table are NOT serialised — those live in code as
+ * `HmmConfig` and may be tuned across releases. Persisting only the dynamic
+ * state lets us re-hydrate against the *current* config without committing
+ * yesterday's transition probabilities to disk.
+ *
+ * [author judgment] If a future release retunes `DEFAULT_TRANSITIONS` /
+ * `DEFAULT_EMISSIONS`, a hydrated session continues with the new matrix from
+ * the next observation onward. The posterior at restoration is treated as a
+ * (possibly slightly stale) prior — drift dynamics correct themselves within
+ * a few turns. This is preferable to versioning the matrix on disk and
+ * refusing to hydrate sessions that span a config change.
+ */
+export interface HmmStateSnapshot {
+  /** Forward probabilities, length 3, ordered by `STATES`. */
+  readonly posterior: readonly [number, number, number];
+  /** True once at least one observation has folded in. */
+  readonly initialized: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Defaults — seeded from plugins/djinn/shared/scripts/engines/c2_hmm.py
 // (the same source D1's threshold mirrors).
@@ -196,5 +217,29 @@ export class IntentHmm {
       posterior: { ON_TASK: updated[0], SIDEQUEST: updated[1], LOST: updated[2] },
       observation: obs,
     };
+  }
+
+  /**
+   * Capture the current forward state as a plain JSON-serialisable object.
+   * The config (transitions, emissions, prior, cutoffs) is intentionally
+   * excluded — see `HmmStateSnapshot` for the rationale.
+   */
+  serialize(): HmmStateSnapshot {
+    return {
+      posterior: [this.alpha[0], this.alpha[1], this.alpha[2]],
+      initialized: this.initialized,
+    };
+  }
+
+  /**
+   * Re-hydrate an HMM from a snapshot, optionally overriding the config.
+   * The snapshot's posterior becomes the new starting `alpha`; subsequent
+   * `update()` calls apply the *current* transition matrix on top of it.
+   */
+  static fromSnapshot(snap: HmmStateSnapshot, cfg: HmmConfig = DEFAULT_CONFIG): IntentHmm {
+    const hmm = new IntentHmm(cfg);
+    hmm.alpha = [snap.posterior[0]!, snap.posterior[1]!, snap.posterior[2]!];
+    hmm.initialized = snap.initialized;
+    return hmm;
   }
 }
