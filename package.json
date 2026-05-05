@@ -56,7 +56,9 @@
     "demo:live": "tsx scripts/demo-live.ts",
     "prepack": "npm run build",
     "stress": "tsx scripts/stress-plugins.ts",
-    "red-team": "tsx scripts/red-team.ts"
+    "red-team": "tsx scripts/red-team.ts",
+    "release:dry": "tsx scripts/publish-packages.ts --dry-run",
+    "release:prep": "tsx scripts/release-prep.ts"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
