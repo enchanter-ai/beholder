@@ -414,7 +414,7 @@ fn render_session_metrics(frame: &mut Frame, area: Rect, app: &AppState) {
         }
     };
     let rows = vec![
-        kv_row("Turns", &format!("{}", m.turns.0)),
+        kv_row("Turns left", &format!("{} ±{}", m.turns.0, m.turns.1)),
         kv_row("Spent", &fmt_money(m.spent_session_usd)),
         kv_row("Spend rate", &format!("{}/hr", fmt_money(m.spend_rate_per_hour_usd))),
         kv_row("Security", &format!("{}", m.security_incidents_session)),
