@@ -1112,12 +1112,18 @@ fn active_age_seconds(t: &TaskState) -> u64 {
     }
 }
 
-/// Format a USD amount: "$0.42", "$5.12", "$12.50".
+/// Format a USD amount: "$0.42", "$5.13", "$12.50".
+///
+/// Uses round-half-away-from-zero (the convention financial-display
+/// readers expect) instead of Rust's default banker's rounding —
+/// `f64::round` already implements that, so we round to cents first
+/// then format.
 fn fmt_money(v: f64) -> String {
     if v.abs() < 0.005 {
         "$0.00".to_string()
     } else {
-        format!("${:.2}", v)
+        let cents = (v * 100.0).round() / 100.0;
+        format!("${:.2}", cents)
     }
 }
 
