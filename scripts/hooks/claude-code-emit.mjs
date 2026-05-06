@@ -83,12 +83,23 @@ function rotateIfLarge() {
     const st = fs.statSync(outPath);
     if (st.size <= MAX_BYTES) return;
     const backup = `${outPath}.1`;
+    // Try rename-swap first (preserves history in .1). On Windows, this
+    // fails while the inspector has the file open for tailing. Fall back
+    // to truncate-in-place — the tailer's `metadata.len() < read_offset`
+    // detection treats truncation as rotation, so the consumer side is
+    // unchanged. We lose the .1 archive in the truncate path; acceptable
+    // tradeoff vs. dropping events because rename was blocked.
     try {
       fs.unlinkSync(backup);
     } catch {
       /* fine if missing */
     }
-    fs.renameSync(outPath, backup);
+    try {
+      fs.renameSync(outPath, backup);
+    } catch {
+      // Rename blocked (most likely Windows + open handle). Truncate.
+      fs.truncateSync(outPath, 0);
+    }
   } catch {
     /* file doesn't exist yet — nothing to rotate */
   }
