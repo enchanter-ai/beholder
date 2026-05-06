@@ -49,6 +49,42 @@ emitter resolves the cache base the same way the inspector does:
 | `SessionEnd`       | `session.closed`                                                      |
 | `PreCompact`       | `phase.entered` (phase=cross-session, plugin=compactor)               |
 
+## Derived plugin events
+
+Each hook also emits derived events that drive the cockpit's PLUGINS table
+from real session activity. These are computed from a per-session state
+file at `~/.cache/enchanter/plugin-state.json` (or `%LOCALAPPDATA%\...` on
+Windows) that accumulates tool counts, error counts, file access, and the
+session anchor across hook firings. The state file is rewritten atomically
+(write tmp + rename) and reset on `SessionEnd`.
+
+| Hook                | Derived event(s)                                                       |
+|---------------------|------------------------------------------------------------------------|
+| `UserPromptSubmit`  | `djinn.anchor.set` (first prompt only) — locks `anchor_intent` (≤200 chars) |
+|                     | `djinn.drift.observed` (subsequent prompts) — word-overlap drift vs. anchor, capped at 0.5 |
+|                     | `emu.context_update` — `turn_estimate = max(12, 200 - turn_count)`, `context_size = prompt_chars` |
+| `PreToolUse`        | `crow.trust.scored` — `posterior_mean = 1 - errors/total` per tool, `observation_count = total` |
+| `PostToolUse`       | `gorgon.hotspot` — top file by access count, `heat = count/total`. **Rate-limited to once every 5 PostToolUse events** to avoid flooding |
+|                     | `naga.spec_check` — Edit/Write only. **Stub-clean verdict** — real algorithm requires diff parsing (deferred to a future release) |
+|                     | `lich.review` — Edit/Write only. **Stub-clean verdict** — same caveat as naga |
+
+### Notes
+
+- **emu's "turns left"**: derived from `200 - turn_count` where `turn_count`
+  is the number of `UserPromptSubmit` events seen this session. The 200-turn
+  budget is hardcoded; v0.7 will pull session quotas from `~/.claude.json`.
+- **gorgon rate-limit**: 5-event cadence chosen to balance signal vs. noise.
+  Edit/Write/Read activity tends to cluster, so emitting on every PostToolUse
+  would spam the cockpit; less frequent than 5 makes the heat-map feel stale.
+- **naga + lich are stubs**: both emit `status: "clean"` unconditionally
+  on Edit/Write. The real algorithms (drift detection vs. spec, sandbox-depth
+  audit) need the actual diff content, which the hook payload doesn't provide
+  in a usable form. Verdicts are visual placeholders until the diff parser
+  lands.
+- **crow trust accumulates within a session**: the posterior is reset every
+  time the cache file disappears (SessionEnd, manual delete). Cross-session
+  trust would need a second persistent store — out of scope for v0.6.
+
 ## Disable
 
 Re-run the installer with `--uninstall`:

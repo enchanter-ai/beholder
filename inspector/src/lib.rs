@@ -172,9 +172,16 @@ fn claude_code_hook_jsonl() -> PathBuf {
 ///    cache dir exists (hooks installed but no events yet) → tail it.
 ///    This is the "real Claude Code work" path — every tool call, prompt,
 ///    session boundary lights up the cockpit from authentic hook output.
-/// 3. stdin is a TTY AND `scripts/live.ts` is reachable from cwd → boot
-///    the showcase runtime. Fallback when hooks aren't wired up.
-/// 4. stdin is a TTY AND nothing else → demo mode (synthetic emitter).
+/// 3. stdin is a TTY AND no hooks installed → print a clear message naming
+///    three options and exit 0. We deliberately do NOT fall through to a
+///    synthetic showcase loop — confusing real-vs-synthetic data is worse
+///    than not opening the cockpit. `enchanter live` and `enchanter inspect`
+///    remain explicit opt-ins for advanced users (monorepo dev / pipe mode).
+///
+/// Note: `src/demo.rs` is now legacy fallback only — the synthetic emitter
+/// is no longer wired by default. It still triggers if `enchanter inspect`
+/// runs and stdin is a TTY (an unusual user setup) but bare `enchanter`
+/// no longer routes there.
 fn default_command() -> Command {
     use std::io::IsTerminal;
     if !std::io::stdin().is_terminal() {
@@ -202,13 +209,18 @@ fn default_command() -> Command {
         });
     }
 
-    // Showcase fallback when running from the monorepo with the demo script.
-    if std::path::Path::new("scripts/live.ts").is_file() {
-        return Command::Live(LiveArgs::default());
-    }
-
-    // Last-resort synthetic demo (handled by app::run when stdin is TTY).
-    Command::Inspect(InspectArgs::default())
+    // No hooks → print guidance and exit. Better than launching a synthetic
+    // demo and confusing the user about real-vs-fake data.
+    eprintln!(
+        "[enchanter] No Claude Code hooks installed. Three options:\n  \
+         1. Install hooks (recommended for real usage):\n     \
+         cd <enchanter-dir> && node scripts/hooks/install-hooks.mjs\n  \
+         2. Pipe events manually:\n     \
+         <runtime> | enchanter\n  \
+         3. Replay a captured JSONL:\n     \
+         enchanter inspect --from <file.jsonl>"
+    );
+    std::process::exit(0);
 }
 
 /// Library entry point invoked from `main`.

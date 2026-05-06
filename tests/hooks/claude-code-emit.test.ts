@@ -56,7 +56,9 @@ describe('claude-code-emit.mjs', () => {
     expect(code).toBe(0);
     expect(existsSync(jsonlPath)).toBe(true);
     const lines = readFileSync(jsonlPath, 'utf8').trim().split('\n');
-    expect(lines).toHaveLength(1);
+    // PreToolUse now emits the base mcp.tool.call.requested AND a derived
+    // crow.trust.scored. The first line is the base event.
+    expect(lines).toHaveLength(2);
     const evt = JSON.parse(lines[0]);
     expect(evt.type).toBe('mcp.tool.call.requested');
     expect(evt.tool).toBe('Read');
@@ -123,5 +125,86 @@ describe('claude-code-emit.mjs', () => {
       },
     });
     expect(result.status).toBe(0);
+  });
+
+  // ----------------------------------------------------------------------
+  // Derived plugin events — one PreToolUse fires the base mcp.* event AND
+  // a derived crow.trust.scored event from accumulated per-session state.
+  // ----------------------------------------------------------------------
+  it('emits crow.trust.scored alongside mcp.tool.call.requested on PreToolUse', () => {
+    const { code, jsonlPath } = runHook('PreToolUse', {
+      session_id: 'sess-derived-1',
+      tool_name: 'Read',
+      tool_input: { file_path: '/tmp/foo.txt' },
+    });
+    expect(code).toBe(0);
+    const lines = readFileSync(jsonlPath, 'utf8').trim().split('\n');
+    expect(lines).toHaveLength(2);
+    const base = JSON.parse(lines[0]);
+    const derived = JSON.parse(lines[1]);
+    expect(base.type).toBe('mcp.tool.call.requested');
+    expect(derived.type).toBe('crow.trust.scored');
+    expect(derived.plugin).toBe('crow');
+    expect(derived.tool_name).toBe('Read');
+    // First call, no errors yet → posterior_mean = 1.0.
+    expect(derived.posterior_mean).toBe(1.0);
+    expect(derived.observation_count).toBe(1);
+  });
+
+  it('emits djinn.anchor.set on first UserPromptSubmit and emu.context_update', () => {
+    const { code, jsonlPath } = runHook('UserPromptSubmit', {
+      session_id: 'sess-anchor-1',
+      prompt: 'Refactor the auth router to support OIDC.',
+    });
+    expect(code).toBe(0);
+    const lines = readFileSync(jsonlPath, 'utf8').trim().split('\n');
+    expect(lines).toHaveLength(3);
+    const types = lines.map((l) => JSON.parse(l).type);
+    expect(types).toContain('lifecycle.anchor');
+    expect(types).toContain('djinn.anchor.set');
+    expect(types).toContain('emu.context_update');
+    const emu = JSON.parse(lines.find((l) => JSON.parse(l).type === 'emu.context_update')!);
+    // 200 - turn_count(=1) = 199.
+    expect(emu.turn_estimate).toBe(199);
+    expect(emu.plugin).toBe('emu');
+  });
+
+  it('emits djinn.drift.observed (not anchor.set) on subsequent UserPromptSubmit', () => {
+    runHook('UserPromptSubmit', {
+      session_id: 'sess-drift-1',
+      prompt: 'Refactor the auth router to support OIDC.',
+    });
+    const { code, jsonlPath } = runHook('UserPromptSubmit', {
+      session_id: 'sess-drift-1',
+      prompt: 'Now write a haiku about a unicorn.',
+    });
+    expect(code).toBe(0);
+    const lines = readFileSync(jsonlPath, 'utf8').trim().split('\n');
+    const types = lines.map((l) => JSON.parse(l).type);
+    expect(types).toContain('djinn.drift.observed');
+    // Anchor set fires once per session, not on the second prompt.
+    const anchorSets = types.filter((t) => t === 'djinn.anchor.set');
+    expect(anchorSets).toHaveLength(1);
+    const drift = JSON.parse(lines.find((l) => JSON.parse(l).type === 'djinn.drift.observed')!);
+    expect(drift.drift).toBeGreaterThan(0);
+    expect(drift.drift).toBeLessThanOrEqual(0.5);
+  });
+
+  it('emits naga.spec_check + lich.review on PostToolUse for Edit', () => {
+    const { code, jsonlPath } = runHook('PostToolUse', {
+      session_id: 'sess-edit-1',
+      tool_name: 'Edit',
+      tool_input: { file_path: '/repo/src/router.ts' },
+      tool_response: { content: 'ok' },
+    });
+    expect(code).toBe(0);
+    const lines = readFileSync(jsonlPath, 'utf8').trim().split('\n');
+    const types = lines.map((l) => JSON.parse(l).type);
+    expect(types).toContain('mcp.tool.result.received');
+    expect(types).toContain('naga.spec_check');
+    expect(types).toContain('lich.review');
+    const naga = JSON.parse(lines.find((l) => JSON.parse(l).type === 'naga.spec_check')!);
+    expect(naga.status).toBe('clean');
+    expect(naga.file).toBe('/repo/src/router.ts');
   });
 });
