@@ -124,6 +124,17 @@ ENCHANTER_BRIDGE=file:./run-2026-05-05.jsonl npx tsx scripts/run.ts -- npm test 
 
 When `stdout` is selected, the supervisor re-routes the wrapped child's stdout to stderr so the JSONL wire stays uncorrupted.
 
+## Connect to your real Claude Code work
+
+If you drive your work through Claude Code, you can pipe its session lifecycle (tool calls, durations, costs, phases) into the same inspector — no demo loop required. One-line install:
+
+```bash
+node scripts/hooks/install-hooks.mjs
+enchanter inspect --tail ~/.cache/enchanter/claude-code.jsonl
+```
+
+Idempotent. Edits `~/.claude/settings.json` only. See [`docs/claude-code-integration.md`](docs/claude-code-integration.md) for the full hook → wire-event mapping, uninstall, and privacy notes.
+
 ## Status
 
 Current production version: **v0.5.0**. Every roadmap item from `0.2` through `0.5` is shipped — see [CHANGELOG.md](CHANGELOG.md) for per-version detail. Next: HTTP transport inside the sandbox worker, npm-publish ceremony for the `@enchanter-ai/plugin-*` packages, and auto-reconnect for the bidirectional control socket.
