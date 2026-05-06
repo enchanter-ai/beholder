@@ -69,6 +69,7 @@
     "zod": "3.25.76"
   },
   "devDependencies": {
+    "@modelcontextprotocol/server-filesystem": "^2025.0.0",
     "@types/node": "^22.0.0",
     "@types/node-notifier": "^8.0.5",
     "@types/ws": "^8.18.1",
