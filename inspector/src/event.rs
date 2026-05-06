@@ -7,6 +7,7 @@
 //! parser keeps making progress when the runtime adds new fields.
 
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 /// Severity ladder shared by veto / review / drift events.
@@ -366,6 +367,22 @@ impl Event {
             Event::PrCreated(_) => "pr.created",
             Event::RequestApproval { .. } => "request.approval",
             Event::Unknown(_) => "unknown",
+        }
+    }
+
+    /// Real wire-format type string. Identical to `type_tag()` for typed
+    /// variants, but for `Event::Unknown` returns the original `type` field
+    /// pulled from `GenericPayload.extra` (preserved by `parse_line`'s
+    /// fallback path) rather than the static `"unknown"` placeholder. This
+    /// is what the events-table renderer wants — `pech.ledger.appended`
+    /// is more useful to a human reader than `unknown`.
+    pub fn type_str(&self) -> Cow<'_, str> {
+        match self {
+            Event::Unknown(p) => match p.extra.get("type").and_then(|v| v.as_str()) {
+                Some(s) if !s.is_empty() => Cow::Borrowed(s),
+                _ => Cow::Borrowed("unknown"),
+            },
+            _ => Cow::Borrowed(self.type_tag()),
         }
     }
 
@@ -757,6 +774,24 @@ mod tests {
             }
             other => panic!("expected Event::Unknown, got {:?}", other.type_tag()),
         }
+    }
+
+    #[test]
+    fn type_str_returns_real_type_for_unknown_variant() {
+        // Round-2 fix: Event::Unknown's type_tag() returns "unknown", which
+        // makes the events table column useless. type_str() must pull the
+        // real wire-side `type` field from the flattened payload extras.
+        let json = r#"{"type": "pech.ledger.appended", "time": 1.0, "plugin": "mcp-client"}"#;
+        let evt = parse_line(json).expect("expected fallback to Event::Unknown");
+        assert_eq!(evt.type_tag(), "unknown");
+        assert_eq!(evt.type_str(), "pech.ledger.appended");
+    }
+
+    #[test]
+    fn type_str_matches_type_tag_for_typed_variants() {
+        let evt = Event::sample_runtime_metrics_with_open_sessions(0);
+        assert_eq!(evt.type_str(), "runtime.metrics");
+        assert_eq!(evt.type_str(), evt.type_tag());
     }
 
     #[test]

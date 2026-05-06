@@ -1139,6 +1139,23 @@ impl AppState {
 
     /// Apply a single event to the state.
     pub fn apply(&mut self, ev: Event) {
+        // Lock-on-first-set: the inspector tracks one session at a time. As
+        // soon as any event arrives carrying a non-empty `session_id`, latch
+        // it onto the session pane so ACTIVE SESSION's "Session" row stops
+        // showing "-". Subsequent events (which may belong to other sessions
+        // when the runtime fans out) do not overwrite — multi-session display
+        // is a future concern.
+        if self.session.session_id.is_empty()
+            || self.session.session_id == "-"
+            || self.session.session_id == "unknown"
+        {
+            if let Some(sid) = ev.session_id() {
+                if !sid.is_empty() {
+                    self.session.session_id = sid.to_string();
+                }
+            }
+        }
+
         match &ev {
             // ---- runtime.metrics ----------------------------------------
             Event::RuntimeMetrics {
@@ -1626,16 +1643,23 @@ impl AppState {
                     .get("daily_cost_usd")
                     .and_then(|v| v.as_f64())
                     .unwrap_or(0.0);
-                self.metrics.spent_session_usd = session_cost;
+                if session_cost > 0.0 {
+                    self.metrics.spent_session_usd = session_cost;
+                }
                 if daily > 0.0 {
                     self.budgets.daily_spend_usd = daily;
                 }
-                self.set_plugin_display("pech", format!("${:.2}", session_cost));
+                self.set_plugin_display("pech", format!("${:.2}", self.metrics.spent_session_usd));
                 let cents = (cost_usd * 100.0).round().max(0.0) as u64;
                 self.push_plugin_usage("pech", cents);
+                // Bump pech's call counter and last_event regardless of the
+                // wire-side `plugin` field — the runtime emits these events
+                // with `plugin: "mcp-client"`, so the generic ev.plugin()
+                // refresh below would credit mcp-client, not pech.
                 if let Some(idx) = self.plugin_index_by_name("pech") {
                     let plug = &mut self.plugins[idx];
                     plug.calls = plug.calls.saturating_add(1);
+                    plug.last_event = Some(p.time);
                 }
             }
             "hydra.veto.fired" => {
@@ -2156,6 +2180,96 @@ mod tests {
         let mut s = AppState::new();
         s.apply(mk_unknown("lifecycle.trust-gate", Some("orchestrator"), &[]));
         assert_eq!(s.session.current_phase, Some(crate::event::Phase::TrustGate));
+    }
+
+    #[test]
+    fn session_id_latches_on_first_event_carrying_one() {
+        // Round-2 fix #2: ACTIVE SESSION shows "-" until any event lands a
+        // non-empty session_id. After the latch, subsequent events do NOT
+        // overwrite (lock-on-first-set) so multi-session fan-out doesn't
+        // corrupt the displayed session.
+        let mut s = AppState::new();
+        assert!(s.session.session_id.is_empty());
+
+        // Event 1 carries session_id=abc123 — latch.
+        let mut p1 = crate::event::GenericPayload {
+            time: 1.0,
+            session_id: Some("abc123".into()),
+            task_id: None,
+            plugin: Some("orchestrator".into()),
+            phase: None,
+            severity: None,
+            message: None,
+            extra: std::collections::BTreeMap::new(),
+        };
+        p1.extra.insert("type".into(), serde_json::json!("lifecycle.anchor"));
+        s.apply(Event::Unknown(p1));
+        assert_eq!(s.session.session_id, "abc123");
+
+        // Event 2 carries session_id=def456 — must NOT overwrite.
+        let mut p2 = crate::event::GenericPayload {
+            time: 2.0,
+            session_id: Some("def456".into()),
+            task_id: None,
+            plugin: Some("orchestrator".into()),
+            phase: None,
+            severity: None,
+            message: None,
+            extra: std::collections::BTreeMap::new(),
+        };
+        p2.extra.insert("type".into(), serde_json::json!("lifecycle.dispatch"));
+        s.apply(Event::Unknown(p2));
+        assert_eq!(s.session.session_id, "abc123", "session_id must lock on first set");
+
+        // Event 3: an event with no session_id is fine — latched value stays.
+        let mut p3 = crate::event::GenericPayload {
+            time: 3.0,
+            session_id: None,
+            task_id: None,
+            plugin: None,
+            phase: None,
+            severity: None,
+            message: None,
+            extra: std::collections::BTreeMap::new(),
+        };
+        p3.extra.insert("type".into(), serde_json::json!("totally.fake"));
+        s.apply(Event::Unknown(p3));
+        assert_eq!(s.session.session_id, "abc123");
+    }
+
+    #[test]
+    fn pech_ledger_appended_updates_last_event_even_when_wire_plugin_is_mcp_client() {
+        // Round-2 fix #3: the runtime emits pech.ledger.appended with
+        // `plugin: "mcp-client"`, not `plugin: "pech"`. The generic
+        // ev.plugin() refresh credits mcp-client's last_event, so pech's
+        // own last_event would never tick. Verify the explicit pech-side
+        // last_event update fires.
+        let mut s = AppState::new();
+        let mut extra = std::collections::BTreeMap::new();
+        extra.insert("type".into(), serde_json::json!("pech.ledger.appended"));
+        extra.insert("session_cost_usd".into(), serde_json::json!(0.42));
+        extra.insert("cost_usd".into(), serde_json::json!(0.05));
+        extra.insert("daily_cost_usd".into(), serde_json::json!(3.21));
+        extra.insert("input_tokens".into(), serde_json::json!(1200));
+        extra.insert("output_tokens".into(), serde_json::json!(380));
+        let ev = Event::Unknown(crate::event::GenericPayload {
+            time: 1_778_086_945.5,
+            session_id: Some("sess-x".into()),
+            task_id: None,
+            plugin: Some("mcp-client".into()), // <-- the live wire shape
+            phase: Some("post-response".into()),
+            severity: None,
+            message: None,
+            extra,
+        });
+        s.apply(ev);
+
+        assert!((s.metrics.spent_session_usd - 0.42).abs() < 1e-9);
+        assert!((s.budgets.daily_spend_usd - 3.21).abs() < 1e-9);
+        let pech = s.plugins.iter().find(|p| p.name == "pech").unwrap();
+        assert_eq!(pech.display_value, "$0.42");
+        assert_eq!(pech.calls, 1);
+        assert_eq!(pech.last_event, Some(1_778_086_945.5));
     }
 
     #[test]

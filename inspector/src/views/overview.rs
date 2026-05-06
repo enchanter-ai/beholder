@@ -514,14 +514,13 @@ fn render_system_health(frame: &mut Frame, area: Rect, app: &AppState) {
 }
 
 /// Format a tracing-log size in bytes through a B / KB / MB / GB ladder.
-/// Returns "-" for zero.
+/// 0 renders as "0 B" (not "-" and not "0.0 KB") so the cockpit shows the
+/// genuine state of the log file rather than a fake placeholder.
 fn fmt_log_size(bytes: u64) -> String {
     const KB: u64 = 1024;
     const MB: u64 = 1024 * KB;
     const GB: u64 = 1024 * MB;
-    if bytes == 0 {
-        "-".to_string()
-    } else if bytes < KB {
+    if bytes < KB {
         format!("{bytes} B")
     } else if bytes < MB {
         let v = (bytes as f64) / KB as f64;
@@ -770,15 +769,16 @@ fn render_events_panel(frame: &mut Frame, area: Rect, app: &AppState) {
 
 fn event_row(ev: &Event, detail_max: usize, baseline: f64) -> Row<'_> {
     let time = fmt_event_time(ev.time(), baseline);
+    // Use `type_str()` (not `type_tag()`) so `Event::Unknown` rows show their
+    // real wire-side discriminator (e.g. `pech.ledger.appended`) instead of
+    // the placeholder "unknown". `type_tag` is kept for callers that still
+    // need a `&'static str`.
+    let type_str = ev.type_str();
     let source = ev.plugin().map(str::to_string).unwrap_or_else(|| {
-        ev.type_tag()
-            .split('.')
-            .next()
-            .unwrap_or("?")
-            .to_string()
+        type_str.split('.').next().unwrap_or("?").to_string()
     });
     let source_color = theme::plugin_color(&source);
-    let tag = ev.type_tag().to_string();
+    let tag = type_str.to_string();
     // Per the new spec: color Type by event-family prefix, not by veto.
     let type_color = event_type_color(&tag);
 
@@ -993,8 +993,18 @@ fn severity_label(s: Severity) -> &'static str {
 
 fn event_detail(ev: &Event) -> String {
     match ev {
-        Event::ToolCall { tool, .. } => format!("tool={tool}"),
-        Event::HydraVeto { reason, .. } => format!("veto: {reason}"),
+        Event::ToolCall { tool, payload, .. } => {
+            let path = payload
+                .data
+                .get("path")
+                .and_then(|v| v.as_str())
+                .or_else(|| payload.data.get("file").and_then(|v| v.as_str()));
+            match path {
+                Some(p) => format!("tool={tool} path={p}"),
+                None => format!("tool={tool}"),
+            }
+        }
+        Event::HydraVeto { reason, .. } => format!("reason: {reason}"),
         Event::CodeModified {
             file,
             lines_added,
@@ -1011,47 +1021,111 @@ fn event_detail(ev: &Event) -> String {
             let phase = phase.as_deref().unwrap_or("-");
             format!("{task_id} {status} [{phase}]")
         }
-        Event::PechLedger { payload, .. } => {
-            format!("session {}", fmt_money(payload.session_cost_usd))
-        }
+        Event::PechLedger { payload, .. } => format!(
+            "${:.4} in/{}/out/{}",
+            payload.cost_usd, payload.input_tokens, payload.output_tokens
+        ),
         Event::RuntimeMetrics {
             open_sessions,
             ongoing_tasks,
             ..
         } => format!("sessions={open_sessions} tasks={ongoing_tasks}"),
-        _ => match ev {
-            Event::SessionStarted(p)
-            | Event::SessionOpened(p)
-            | Event::SessionClosed(p)
-            | Event::SessionEnded(p)
-            | Event::PhaseEntered(p)
-            | Event::PhaseCompleted(p)
-            | Event::PluginLoaded(p)
-            | Event::PluginHealth(p)
-            | Event::ToolResult(p)
-            | Event::ToolError(p)
-            | Event::SylphVeto(p)
-            | Event::CrowTrust(p)
-            | Event::DjinnAnchor(p)
-            | Event::DjinnDrift(p)
-            | Event::GorgonHotspot(p)
-            | Event::NagaSpecCheck(p)
-            | Event::LichReview(p)
-            | Event::EmuContextUpdate(p)
-            | Event::TaskCreated(p)
-            | Event::TaskStarted(p)
-            | Event::TaskBlocked(p)
-            | Event::TaskCompleted(p)
-            | Event::TaskFailed(p)
-            | Event::CodeGenerated(p)
-            | Event::FileCreated(p)
-            | Event::FileModified(p)
-            | Event::TestRun(p)
-            | Event::TestPassed(p)
-            | Event::TestFailed(p)
-            | Event::PrCreated(p) => p.message.clone().unwrap_or_default(),
-            _ => String::new(),
+        Event::Unknown(p) => unknown_event_detail(p),
+        _ => match generic_payload(ev) {
+            Some(p) => p.message.clone().unwrap_or_default(),
+            None => String::new(),
         },
+    }
+}
+
+/// Build a one-line Details column for an `Event::Unknown` payload. Walks
+/// a priority chain of typed accessors and synthesized type-specific
+/// summaries, falling back to a truncated JSON dump of the extras so the
+/// column is never silently empty.
+fn unknown_event_detail(p: &crate::event::GenericPayload) -> String {
+    // 1: explicit message field
+    if let Some(m) = p.message.as_deref() {
+        if !m.is_empty() {
+            return m.to_string();
+        }
+    }
+    // 2: extras["message"]
+    if let Some(s) = p.extra.get("message").and_then(|v| v.as_str()) {
+        if !s.is_empty() {
+            return s.to_string();
+        }
+    }
+    // 3: extras["reason"]
+    if let Some(s) = p.extra.get("reason").and_then(|v| v.as_str()) {
+        if !s.is_empty() {
+            return format!("reason: {s}");
+        }
+    }
+    // 4: type-specific synthesis
+    let type_tag = p.extra.get("type").and_then(|v| v.as_str()).unwrap_or("");
+    if type_tag.ends_with(".veto.fired") || type_tag.ends_with(".veto") {
+        if let Some(s) = p.extra.get("policy").and_then(|v| v.as_str()) {
+            return format!("policy: {s}");
+        }
+    }
+    if type_tag == "mcp.tool.call.requested" {
+        let tool = p.extra.get("tool").and_then(|v| v.as_str()).unwrap_or("?");
+        let args_path = p
+            .extra
+            .get("args")
+            .and_then(|v| v.get("path"))
+            .and_then(|v| v.as_str())
+            .or_else(|| p.extra.get("path").and_then(|v| v.as_str()));
+        return match args_path {
+            Some(path) => format!("tool={tool} path={path}"),
+            None => format!("tool={tool}"),
+        };
+    }
+    if type_tag == "mcp.tool.result.received" {
+        let tool = p.extra.get("tool").and_then(|v| v.as_str()).unwrap_or("?");
+        let vendor = p.extra.get("vendor").and_then(|v| v.as_str());
+        return match vendor {
+            Some(v) => format!("tool={tool} vendor={v}"),
+            None => format!("tool={tool}"),
+        };
+    }
+    if type_tag == "pech.ledger.appended" {
+        let cost = p.extra.get("cost_usd").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let inp = p.extra.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+        let out = p.extra.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+        return format!("${cost:.4} in/{inp}/out/{out}");
+    }
+    if type_tag == "crow.trust.scored" {
+        let post = p
+            .extra
+            .get("posterior_mean")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        let tool = p.extra.get("tool_name").and_then(|v| v.as_str()).unwrap_or("?");
+        return format!("trust={post:.2} tool={tool}");
+    }
+    if type_tag.starts_with("lifecycle.") {
+        if let Some(suffix) = type_tag.strip_prefix("lifecycle.") {
+            let elapsed = p.extra.get("elapsed_ms").and_then(|v| v.as_u64());
+            return match elapsed {
+                Some(ms) => format!("phase={suffix} ({ms} ms)"),
+                None => format!("phase={suffix}"),
+            };
+        }
+    }
+    // 5: last-resort — JSON-stringify the extras (minus the redundant `type`),
+    // truncated to 60 chars so the column never blows out.
+    let mut filtered = p.extra.clone();
+    filtered.remove("type");
+    if filtered.is_empty() {
+        return String::new();
+    }
+    let raw = serde_json::to_string(&filtered).unwrap_or_default();
+    if raw.chars().count() > 60 {
+        let head: String = raw.chars().take(58).collect();
+        format!("{head}..")
+    } else {
+        raw
     }
 }
 
@@ -1346,14 +1420,20 @@ mod tests {
 
     #[test]
     fn fmt_log_size_units() {
-        assert_eq!(fmt_log_size(0), "-");
+        // Round-2 spec: 0 renders as "0 B" (not "-" and not "0.0 KB"); each
+        // ladder boundary picks the next unit and rounds to one decimal.
+        assert_eq!(fmt_log_size(0), "0 B");
+        assert_eq!(fmt_log_size(999), "999 B");
+        assert_eq!(fmt_log_size(1024), "1.0 KB");
         assert_eq!(fmt_log_size(512), "512 B");
         assert_eq!(fmt_log_size(2 * 1024), "2.0 KB");
+        assert_eq!(fmt_log_size(1_048_576), "1.0 MB");
         assert_eq!(fmt_log_size(5 * 1024 * 1024), "5.0 MB");
         // The original bug: a 35 GB-sounding number must NOT silently appear
         // for a tens-of-MB log. Synthesize 35 MB and confirm we render
         // "35.0 MB", not "35840 MB" or any GB-scale figure.
         assert_eq!(fmt_log_size(35 * 1024 * 1024), "35.0 MB");
+        assert_eq!(fmt_log_size(1_073_741_824), "1.0 GB");
         assert_eq!(fmt_log_size(2 * 1024 * 1024 * 1024), "2.0 GB");
     }
 
@@ -1375,6 +1455,120 @@ mod tests {
         assert_eq!(fmt_event_time(0.0, 0.0), "00:00.000");
         assert_eq!(fmt_event_time(45.5, 0.0), "00:45.500");
         assert_eq!(fmt_event_time(125.0, 0.0), "02:05.000");
+    }
+
+    #[test]
+    fn unknown_event_detail_priority_chain() {
+        use crate::event::GenericPayload;
+        use std::collections::BTreeMap;
+
+        // 1: explicit message wins over everything else.
+        let p = GenericPayload {
+            time: 0.0,
+            session_id: None,
+            task_id: None,
+            plugin: None,
+            phase: None,
+            severity: None,
+            message: Some("hello world".into()),
+            extra: BTreeMap::new(),
+        };
+        assert_eq!(unknown_event_detail(&p), "hello world");
+
+        // 2: extras["message"]
+        let mut extra = BTreeMap::new();
+        extra.insert("message".into(), serde_json::json!("via extras"));
+        let p = GenericPayload {
+            message: None,
+            extra,
+            ..GenericPayload {
+                time: 0.0,
+                session_id: None,
+                task_id: None,
+                plugin: None,
+                phase: None,
+                severity: None,
+                message: None,
+                extra: BTreeMap::new(),
+            }
+        };
+        assert_eq!(unknown_event_detail(&p), "via extras");
+
+        // 3: extras["reason"]
+        let mut extra = BTreeMap::new();
+        extra.insert("reason".into(), serde_json::json!("policy=no-secrets"));
+        let p = GenericPayload {
+            time: 0.0, session_id: None, task_id: None, plugin: None,
+            phase: None, severity: None, message: None, extra,
+        };
+        assert_eq!(unknown_event_detail(&p), "reason: policy=no-secrets");
+
+        // 4: pech.ledger.appended synthesis
+        let mut extra = BTreeMap::new();
+        extra.insert("type".into(), serde_json::json!("pech.ledger.appended"));
+        extra.insert("cost_usd".into(), serde_json::json!(0.0042));
+        extra.insert("input_tokens".into(), serde_json::json!(1200));
+        extra.insert("output_tokens".into(), serde_json::json!(380));
+        let p = GenericPayload {
+            time: 0.0, session_id: None, task_id: None, plugin: None,
+            phase: None, severity: None, message: None, extra,
+        };
+        assert_eq!(unknown_event_detail(&p), "$0.0042 in/1200/out/380");
+
+        // 4: mcp.tool.call.requested with args.path
+        let mut extra = BTreeMap::new();
+        extra.insert("type".into(), serde_json::json!("mcp.tool.call.requested"));
+        extra.insert("tool".into(), serde_json::json!("read_file"));
+        extra.insert(
+            "args".into(),
+            serde_json::json!({"path": "src/router.ts"}),
+        );
+        let p = GenericPayload {
+            time: 0.0, session_id: None, task_id: None, plugin: None,
+            phase: None, severity: None, message: None, extra,
+        };
+        assert_eq!(unknown_event_detail(&p), "tool=read_file path=src/router.ts");
+
+        // 4: lifecycle.<phase> synthesis
+        let mut extra = BTreeMap::new();
+        extra.insert("type".into(), serde_json::json!("lifecycle.dispatch"));
+        extra.insert("elapsed_ms".into(), serde_json::json!(27));
+        let p = GenericPayload {
+            time: 0.0, session_id: None, task_id: None, plugin: None,
+            phase: None, severity: None, message: None, extra,
+        };
+        assert_eq!(unknown_event_detail(&p), "phase=dispatch (27 ms)");
+
+        // 5: fallback — JSON of the extras (minus `type`) when nothing else matches.
+        let mut extra = BTreeMap::new();
+        extra.insert("type".into(), serde_json::json!("totally.fake"));
+        extra.insert("custom".into(), serde_json::json!(42));
+        let p = GenericPayload {
+            time: 0.0, session_id: None, task_id: None, plugin: None,
+            phase: None, severity: None, message: None, extra,
+        };
+        let got = unknown_event_detail(&p);
+        assert!(got.contains("custom"), "fallback must include extras: got {got}");
+    }
+
+    #[test]
+    fn event_detail_for_pech_ledger_typed_variant() {
+        use crate::event::PechLedgerPayload;
+        let ev = Event::PechLedger {
+            payload: PechLedgerPayload {
+                input_tokens: 1200,
+                output_tokens: 380,
+                cost_usd: 0.0042,
+                session_cost_usd: 0.42,
+                daily_cost_usd: 3.21,
+            },
+            time: 0.0,
+            session_id: None,
+            task_id: None,
+            phase: None,
+            plugin: None,
+        };
+        assert_eq!(event_detail(&ev), "$0.0042 in/1200/out/380");
     }
 
     #[test]
