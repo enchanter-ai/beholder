@@ -184,7 +184,9 @@ fn claude_code_hook_jsonl() -> PathBuf {
 /// no longer routes there.
 fn default_command() -> Command {
     use std::io::IsTerminal;
-    if !std::io::stdin().is_terminal() {
+    let stdin_tty = std::io::stdin().is_terminal();
+    if !stdin_tty {
+        eprintln!("[enchanter] stdin is not a TTY → reading JSONL from stdin (pipe mode)");
         return Command::Inspect(InspectArgs::default());
     }
 
@@ -193,12 +195,17 @@ fn default_command() -> Command {
     // since install), but the parent dir does, and `--tail` waits up to 30s
     // for the file to appear. That's the "boom, real data" UX.
     let hook_jsonl = claude_code_hook_jsonl();
-    let hooks_wired_up = hook_jsonl.exists()
-        || hook_jsonl.parent().map(|p| p.is_dir()).unwrap_or(false);
+    let exists = hook_jsonl.exists();
+    let parent_exists = hook_jsonl.parent().map(|p| p.is_dir()).unwrap_or(false);
+    let hooks_wired_up = exists || parent_exists;
+    eprintln!(
+        "[enchanter] checking hooks: path={} exists={} parent_dir={} → {}",
+        hook_jsonl.display(),
+        exists,
+        parent_exists,
+        if hooks_wired_up { "TAIL" } else { "no-hooks" }
+    );
     if hooks_wired_up {
-        // Log so users can grep ~/.cache/enchanter/inspector.log to confirm
-        // which mode bare `enchanter` picked — useful when troubleshooting
-        // "is this real or showcase data" without restarting the binary.
         tracing::info!(
             path = %hook_jsonl.display(),
             "default_command: hooks wired up — tailing real Claude Code stream"

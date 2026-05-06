@@ -39,32 +39,27 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
     let terminal = &mut guard.terminal;
 
     // Demo-mode trigger: stdin source AND no pipe (terminal stdin) → skip
-    // the real transport and run the built-in synthetic emitter so the
-    // dashboard always shows life on a bare `enchanter.exe` launch.
-    let demo_mode = matches!(config.source, Source::Stdin) && io::stdin().is_terminal();
+    // Demo mode REMOVED. Earlier versions auto-launched the synthetic
+    // emitter when stdin was a TTY + Source::Stdin — that path was masking
+    // real-data issues by silently filling the cockpit with fake events.
+    // The user explicitly asked to kill it. If a Source::Stdin is reached
+    // here with no piped input, the cockpit will simply sit at "(no events)"
+    // until the user pipes something in or quits — honest, non-deceiving.
+    let demo_mode = false;
 
-    // Build the unified event receiver — either from real transport or demo.
-    // The control writer is connected ONLY for `Source::SocketControl`; every
-    // other source path returns a disconnected writer so `send_control` errors
-    // visibly when the user tries to approve/veto on a read-only stream.
-    let (mut event_rx, control_writer): (mpsc::Receiver<Event>, ControlWriter) = if demo_mode {
-        let (tx, rx) = mpsc::channel::<Event>(1024);
-        crate::demo::spawn_demo_emitter(tx);
-        (rx, ControlWriter::disconnected())
-    } else {
-        match config.source.clone() {
-            Source::SocketControl(_) => {
-                // try_spawn opens the socket eagerly so we surface failure
-                // before the TUI swallows the error.
-                let transport = Transport::try_spawn(map_source(config.source), 1024).await?;
-                let writer = transport.writer();
-                (transport.into_receiver(), writer)
-            }
-            _ => (
-                Transport::spawn(map_source(config.source), 1024).into_receiver(),
-                ControlWriter::disconnected(),
-            ),
+    let (mut event_rx, control_writer): (mpsc::Receiver<Event>, ControlWriter) = match config
+        .source
+        .clone()
+    {
+        Source::SocketControl(_) => {
+            let transport = Transport::try_spawn(map_source(config.source), 1024).await?;
+            let writer = transport.writer();
+            (transport.into_receiver(), writer)
         }
+        _ => (
+            Transport::spawn(map_source(config.source), 1024).into_receiver(),
+            ControlWriter::disconnected(),
+        ),
     };
 
     // Keyboard: poll-on-blocking-thread, forward Crossterm events over a channel.
