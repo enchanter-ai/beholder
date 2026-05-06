@@ -152,25 +152,56 @@ impl InspectArgs {
     }
 }
 
+/// Resolve the path the Claude Code hook emitter writes to. Mirrors the
+/// algorithm in `scripts/hooks/claude-code-emit.mjs::cachePath` —
+/// XDG_CACHE_HOME → LOCALAPPDATA → HOME/.cache, all under `enchanter/`.
+fn claude_code_hook_jsonl() -> PathBuf {
+    let base = std::env::var_os("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("LOCALAPPDATA").map(PathBuf::from))
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))
+        .unwrap_or_else(std::env::temp_dir);
+    base.join("enchanter").join("claude-code.jsonl")
+}
+
 /// Decide what bare `enchanter` (no subcommand) should do.
 ///
-/// Hierarchy:
-/// 1. stdin is piped → consume JSONL from stdin (`Source::Stdin`, which the
-///    app loop turns into demo mode iff the stdin is also a TTY but that
-///    shouldn't happen if it's piped).
-/// 2. stdin is a TTY AND `scripts/live.ts` is reachable from cwd → boot the
-///    real runtime via `Source::Exec`. This is the "boom, just works"
-///    path when the binary is run from `client/enchanter/`.
-/// 3. stdin is a TTY AND `scripts/live.ts` is NOT reachable → fall back to
-///    `Source::Stdin`, which the app loop turns into the synthetic
-///    `src/demo.rs` emitter so the cockpit still has something to render.
+/// Hierarchy, highest priority first:
+/// 1. stdin is piped → consume JSONL from stdin.
+/// 2. stdin is a TTY AND the Claude Code hook JSONL exists OR its parent
+///    cache dir exists (hooks installed but no events yet) → tail it.
+///    This is the "real Claude Code work" path — every tool call, prompt,
+///    session boundary lights up the cockpit from authentic hook output.
+/// 3. stdin is a TTY AND `scripts/live.ts` is reachable from cwd → boot
+///    the showcase runtime. Fallback when hooks aren't wired up.
+/// 4. stdin is a TTY AND nothing else → demo mode (synthetic emitter).
 fn default_command() -> Command {
     use std::io::IsTerminal;
-    if std::io::stdin().is_terminal() && std::path::Path::new("scripts/live.ts").is_file() {
-        Command::Live(LiveArgs::default())
-    } else {
-        Command::Inspect(InspectArgs::default())
+    if !std::io::stdin().is_terminal() {
+        return Command::Inspect(InspectArgs::default());
     }
+
+    // Real Claude Code path: prefer it whenever hooks are installed —
+    // the JSONL file may not exist yet (no Claude session has fired a hook
+    // since install), but the parent dir does, and `--tail` waits up to 30s
+    // for the file to appear. That's the "boom, real data" UX.
+    let hook_jsonl = claude_code_hook_jsonl();
+    let hooks_wired_up = hook_jsonl.exists()
+        || hook_jsonl.parent().map(|p| p.is_dir()).unwrap_or(false);
+    if hooks_wired_up {
+        return Command::Inspect(InspectArgs {
+            tail: Some(hook_jsonl),
+            ..InspectArgs::default()
+        });
+    }
+
+    // Showcase fallback when running from the monorepo with the demo script.
+    if std::path::Path::new("scripts/live.ts").is_file() {
+        return Command::Live(LiveArgs::default());
+    }
+
+    // Last-resort synthetic demo (handled by app::run when stdin is TTY).
+    Command::Inspect(InspectArgs::default())
 }
 
 /// Library entry point invoked from `main`.
