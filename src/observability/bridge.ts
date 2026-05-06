@@ -66,13 +66,26 @@ export function toWireRecord(event: EnchantedEvent): Record<string, unknown> {
   // Convenience: copy session_id / phase / plugin off the envelope when the
   // payload didn't already provide them. Rust's GenericPayload reads these
   // off the top level, and well-typed variants accept them too.
-  if (record.session_id === undefined && event.session_id !== '') {
+  //
+  // CRITICAL: only set the field when the source value is a non-empty
+  // STRING. An `undefined` value here was historically writing
+  // `record.session_id = undefined`, which JSON.stringify drops on the
+  // wire — but the schema validator runs on the IN-MEMORY record BEFORE
+  // serialization and rejects with "expected string, got undefined",
+  // silently dropping any synthetic event whose publisher didn't set
+  // session_id. (Caught by the live-cockpit audit: 6 of 7 loop scenarios
+  // had every event swallowed at this boundary.)
+  if (
+    record.session_id === undefined &&
+    typeof event.session_id === 'string' &&
+    event.session_id !== ''
+  ) {
     record.session_id = event.session_id;
   }
-  if (record.phase === undefined && event.phase !== undefined) {
+  if (record.phase === undefined && typeof event.phase === 'string' && event.phase !== '') {
     record.phase = event.phase;
   }
-  if (record.plugin === undefined && event.source !== '') {
+  if (record.plugin === undefined && typeof event.source === 'string' && event.source !== '') {
     record.plugin = event.source;
   }
 
