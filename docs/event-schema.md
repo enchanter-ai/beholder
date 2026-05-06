@@ -129,6 +129,68 @@ bridge serializes one event per line by:
 This keeps the TS bus shape clean (structured payloads) while
 producing the flat top-level shape Rust expects.
 
+## Bidirectional control channel (v0.5 #4)
+
+The bridge can also flow JSONL **outbound from the inspector to the runtime**
+on the same TCP socket. Read-only sources (`Source::Socket`, file, stdin)
+ignore the write half; the bidirectional opt-in is `Source::SocketControl`
+(`enchanter --control-socket addr`) on the Rust side and constructing a
+`TcpControlSink` (or attaching any `ControlChannel`) on the TS side.
+
+Direction is inferred from the top-level discriminator:
+
+- Inbound to the inspector — JSON object with `type` (every event variant
+  defined above, plus `request.approval` below).
+- Outbound from the inspector — JSON object with `kind: "control.command"`.
+  Discriminating on `kind` keeps the wire shape unambiguous on the same
+  socket without adding a side channel.
+
+### `request.approval` (inbound to the inspector)
+
+Emitted by the runtime's trust-gate phase when a `ControlChannel` is
+attached and a human verdict is needed before dispatch.
+
+| Field            | Type   | Required | Notes |
+|------------------|--------|----------|-------|
+| `type`           | string | yes      | Always `"request.approval"`. |
+| `time`           | number | yes      | Wall-clock seconds since the Unix epoch. |
+| `correlation_id` | string | yes      | Echo this back inside the response. |
+| `plugin`         | string | yes      | Plugin requesting approval (`trust-pin`, etc.). |
+| `reason`         | string | yes      | Human-readable rationale for the pause. |
+| `phase`          | string | optional | Phase enum; almost always `"trust-gate"`. |
+| `session_id`     | string | optional | Originating session. |
+| `payload`        | object | optional | Free-form context (tool name, args, etc.). |
+
+### `approval.response` (outbound from the inspector)
+
+Sent by the inspector to resolve a pending `request.approval`. The runtime
+matches the response to the awaiting trust-gate by `correlation_id`. On
+default-off (no control channel attached), the runtime never sends a
+`request.approval` and never expects a response — the trust-gate behaves
+identically to v0.4. With a channel attached, missing or late responses
+fail closed (default 30 s timeout → veto).
+
+```json
+{
+  "kind": "control.command",
+  "command": "approval.response",
+  "correlation_id": "cid-...",
+  "decision": "approve" | "veto",
+  "reason": "<optional free text>"
+}
+```
+
+| Field            | Type   | Required | Notes |
+|------------------|--------|----------|-------|
+| `kind`           | string | yes      | Always `"control.command"`. |
+| `command`        | string | yes      | Always `"approval.response"`. |
+| `correlation_id` | string | yes      | Must match the inbound `request.approval`. |
+| `decision`       | string | yes      | `"approve"` or `"veto"`. Other values are rejected by the parser. |
+| `reason`         | string | optional | Free-form note surfaced in `SecurityVetoError` on veto. |
+
+Lines outside this shape are logged once and skipped on the runtime side —
+forward-compatibility for additional command kinds.
+
 ## Versioning
 
 The `type` discriminator is the version axis. Renames are breaking;

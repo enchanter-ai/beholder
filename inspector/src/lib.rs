@@ -12,6 +12,7 @@ pub mod event;
 pub mod transport;
 pub mod state;
 pub mod app;
+pub mod control;
 pub mod demo;
 pub mod ui;
 pub mod views;
@@ -28,8 +29,14 @@ pub enum Source {
     Stdin,
     /// Replay a previously captured JSONL file.
     File(PathBuf),
-    /// Connect to a runtime socket (TCP `host:port` or unix path).
+    /// Connect to a runtime socket (TCP `host:port` or unix path) READ-ONLY.
+    /// Inbound events only; the inspector cannot send commands back.
     Socket(String),
+    /// v0.5 #4 — connect bidirectionally to a runtime socket. Reads inbound
+    /// events AND writes outbound `approval.response` commands on the same
+    /// socket. Opt-in via `--control-socket`; the read-only `--socket`
+    /// remains the default for back-compatibility.
+    SocketControl(String),
 }
 
 /// Resolved runtime configuration handed to `app::run`.
@@ -59,20 +66,27 @@ enum Command {
 #[derive(Args, Debug, Default)]
 struct InspectArgs {
     /// Replay events from a JSONL file instead of stdin.
-    #[arg(long, value_name = "JSONL_FILE", conflicts_with = "socket")]
+    #[arg(long, value_name = "JSONL_FILE", conflicts_with_all = ["socket", "control_socket"])]
     from: Option<PathBuf>,
 
-    /// Connect to a runtime socket (e.g. `127.0.0.1:7878` or `/tmp/enchanter.sock`).
-    #[arg(long, value_name = "ADDR")]
+    /// Connect READ-ONLY to a runtime socket (e.g. `127.0.0.1:7878`). The
+    /// inspector receives events but cannot send commands back.
+    #[arg(long, value_name = "ADDR", conflicts_with = "control_socket")]
     socket: Option<String>,
+
+    /// v0.5 #4 — connect bidirectionally to a runtime socket. Reads events
+    /// AND sends approve/veto decisions on the same socket. Opt-in.
+    #[arg(long, value_name = "ADDR")]
+    control_socket: Option<String>,
 }
 
 impl InspectArgs {
     fn into_config(self) -> Config {
-        let source = match (self.from, self.socket) {
-            (Some(path), _) => Source::File(path),
-            (None, Some(addr)) => Source::Socket(addr),
-            (None, None) => Source::Stdin,
+        let source = match (self.from, self.socket, self.control_socket) {
+            (Some(path), _, _) => Source::File(path),
+            (None, _, Some(addr)) => Source::SocketControl(addr),
+            (None, Some(addr), None) => Source::Socket(addr),
+            (None, None, None) => Source::Stdin,
         };
         Config { source }
     }

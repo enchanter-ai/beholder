@@ -7,9 +7,11 @@
 //! `shared/conduct/hooks.md`: one bad line never crashes the consumer.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::sync::mpsc;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::net::tcp::OwnedWriteHalf;
+use tokio::sync::{mpsc, Mutex};
 
 use crate::event::Event;
 
@@ -23,7 +25,60 @@ pub enum Source {
     /// One-shot replay of a JSONL file. No tail-follow on MVP.
     File(PathBuf),
     /// Connect to a TCP `host:port` and stream until the peer closes.
+    /// READ-ONLY — peer's writes are ignored.
     Socket(String),
+    /// v0.5 #4: connect to a TCP `host:port` bidirectionally — read events
+    /// AND write outbound control commands on the same socket. Opt-in via
+    /// `--control-socket` so plain `--socket` callers stay read-only and
+    /// back-compatible.
+    SocketControl(String),
+}
+
+/// Outbound control half of a bidirectional transport. Cheap to clone — wraps
+/// a tokio `OwnedWriteHalf` behind a mutex so multiple call-sites
+/// (UI input handlers, future plugins) can share it without re-locking.
+#[derive(Clone)]
+pub struct ControlWriter {
+    inner: Arc<Mutex<Option<OwnedWriteHalf>>>,
+}
+
+impl ControlWriter {
+    /// Build a no-op writer (used when the source is read-only). All sends
+    /// are silently dropped — log at warn so misconfiguration is visible.
+    pub fn disconnected() -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    fn from_half(half: OwnedWriteHalf) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(Some(half))),
+        }
+    }
+
+    /// Write a single line, appending `\n` if the caller didn't.
+    /// Returns Err on disconnected, write failure, or shutdown peer.
+    pub async fn send_control(&self, line: &str) -> std::io::Result<()> {
+        let mut guard = self.inner.lock().await;
+        let Some(half) = guard.as_mut() else {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotConnected,
+                "control writer not connected",
+            ));
+        };
+        half.write_all(line.as_bytes()).await?;
+        if !line.ends_with('\n') {
+            half.write_all(b"\n").await?;
+        }
+        half.flush().await?;
+        Ok(())
+    }
+
+    /// True when the writer was constructed with a real socket half.
+    pub async fn is_connected(&self) -> bool {
+        self.inner.lock().await.is_some()
+    }
 }
 
 /// Owns the receive side of the event channel produced by a spawned
@@ -31,6 +86,9 @@ pub enum Source {
 /// EOF / disconnect / consumer-drop, signalling end-of-stream to consumers.
 pub struct Transport {
     rx: mpsc::Receiver<Event>,
+    /// Outbound control half. Disconnected for stdin / file / read-only
+    /// sockets; connected for `Source::SocketControl`.
+    writer: ControlWriter,
 }
 
 impl Transport {
@@ -51,9 +109,21 @@ impl Transport {
             Source::Socket(addr) => {
                 tokio::spawn(run_socket(addr, tx));
             }
+            Source::SocketControl(_) => {
+                // Bidirectional sockets need eager open to surface the writer.
+                // Falling back to disconnected control here keeps `spawn`
+                // total but the channel won't accept inbound commands. Use
+                // `try_spawn` for control-aware setups.
+                tracing::warn!(
+                    "Source::SocketControl spawned via Transport::spawn — control writer disconnected; use try_spawn"
+                );
+            }
         }
 
-        Transport { rx }
+        Transport {
+            rx,
+            writer: ControlWriter::disconnected(),
+        }
     }
 
     /// Like [`Transport::spawn`], but opens file / socket sources eagerly
@@ -63,24 +133,36 @@ impl Transport {
         let buffer = if buffer == 0 { DEFAULT_BUFFER } else { buffer };
         let (tx, rx) = mpsc::channel(buffer);
 
-        match source {
+        let writer = match source {
             Source::Stdin => {
                 tokio::spawn(run_stdin(tx));
+                ControlWriter::disconnected()
             }
             Source::File(path) => {
                 let file = tokio::fs::File::open(&path).await?;
                 let reader = BufReader::new(file);
                 tokio::spawn(forward_lines(reader, tx, "file"));
+                ControlWriter::disconnected()
             }
             Source::Socket(addr) => {
                 let stream = tokio::net::TcpStream::connect(&addr).await?;
                 let (read_half, _write_half) = stream.into_split();
                 let reader = BufReader::new(read_half);
                 tokio::spawn(forward_lines(reader, tx, "socket"));
+                // Read-only mode: write half is dropped, control writer
+                // exposes disconnected so any send_control calls report it.
+                ControlWriter::disconnected()
             }
-        }
+            Source::SocketControl(addr) => {
+                let stream = tokio::net::TcpStream::connect(&addr).await?;
+                let (read_half, write_half) = stream.into_split();
+                let reader = BufReader::new(read_half);
+                tokio::spawn(forward_lines(reader, tx, "socket-control"));
+                ControlWriter::from_half(write_half)
+            }
+        };
 
-        Ok(Transport { rx })
+        Ok(Transport { rx, writer })
     }
 
     /// Receive the next event, or `None` once the source ends.
@@ -89,9 +171,23 @@ impl Transport {
     }
 
     /// Surrender the underlying receiver — useful when handing the stream
-    /// off to a select-loop that wants the raw `mpsc::Receiver`.
+    /// off to a select-loop that wants the raw `mpsc::Receiver`. The control
+    /// writer is dropped along with the rest of `Transport`; clone
+    /// [`Transport::writer`] first if the caller still needs it.
     pub fn into_receiver(self) -> mpsc::Receiver<Event> {
         self.rx
+    }
+
+    /// Cheap-to-clone outbound control writer. Disconnected for read-only
+    /// sources; connected for [`Source::SocketControl`].
+    pub fn writer(&self) -> ControlWriter {
+        self.writer.clone()
+    }
+
+    /// Convenience: write one outbound control line. Equivalent to
+    /// `transport.writer().send_control(line).await`.
+    pub async fn send_control(&self, line: &str) -> std::io::Result<()> {
+        self.writer.send_control(line).await
     }
 }
 

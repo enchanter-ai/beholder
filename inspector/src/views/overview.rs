@@ -22,7 +22,7 @@ use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row, Table};
 use ratatui::Frame;
 
 use crate::event::{Event, Phase, Severity};
-use crate::state::{AppState, Panel, PluginStatus, Risk, TaskState, TaskStatus};
+use crate::state::{AppState, Panel, PendingApproval, PluginStatus, Risk, TaskState, TaskStatus};
 use crate::ui::{layout, theme, widgets};
 
 /// Render the overview screen into `area`.
@@ -50,6 +50,15 @@ pub fn render(frame: &mut Frame, area: Rect, app: &AppState) {
 // ---------------------------------------------------------------------------
 fn render_top_bar(frame: &mut Frame, area: Rect, app: &AppState) {
     if area.area() == 0 {
+        return;
+    }
+
+    // v0.5 #4 — when a request.approval is pending, the top bar swaps out
+    // its normal LIVE/PAUSED label for a high-visibility "PENDING APPROVAL"
+    // banner. Plain ASCII brackets, LTR-only, no emoji or unicode glyphs
+    // per the rendering contract.
+    if let Some(pending) = app.peek_pending_approval() {
+        render_pending_approval_banner(frame, area, app, pending);
         return;
     }
 
@@ -112,6 +121,67 @@ fn render_top_bar(frame: &mut Frame, area: Rect, app: &AppState) {
         Style::default().fg(theme::TEXT_DIM),
     )]);
     frame.render_widget(Paragraph::new(right).alignment(Alignment::Right), cols[1]);
+}
+
+/// v0.5 #4 — replace the top-bar contents with a high-visibility PENDING
+/// APPROVAL banner. ASCII-only ("[a]pprove [v]eto"), no unicode glyphs.
+/// Multiple pending approvals show queue depth.
+fn render_pending_approval_banner(frame: &mut Frame, area: Rect, app: &AppState, pending: &PendingApproval) {
+    let block = widgets::panel_block_with_color("", false, theme::STATUS_CRITICAL);
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    if inner.area() == 0 {
+        return;
+    }
+
+    let depth = app.pending_approvals.len();
+    let depth_suffix = if depth > 1 {
+        format!(" (+{} more)", depth - 1)
+    } else {
+        String::new()
+    };
+
+    let banner_spans = vec![
+        Span::styled(
+            "PENDING APPROVAL",
+            Style::default()
+                .fg(theme::STATUS_CRITICAL)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(": ", Style::default().fg(theme::TEXT_DIM)),
+        Span::styled(
+            pending.plugin.clone(),
+            Style::default()
+                .fg(theme::TEXT_PRIMARY)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(" - ", Style::default().fg(theme::TEXT_DIM)),
+        Span::styled(
+            pending.reason.clone(),
+            Style::default().fg(theme::TEXT_PRIMARY),
+        ),
+        Span::styled(depth_suffix, Style::default().fg(theme::TEXT_DIM)),
+    ];
+    let hint = Line::from(vec![Span::styled(
+        "[a]pprove [v]eto",
+        Style::default()
+            .fg(theme::STATUS_WARNING)
+            .add_modifier(Modifier::BOLD),
+    )]);
+
+    let cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Fill(1),
+            Constraint::Length("[a]pprove [v]eto".chars().count() as u16 + 2),
+        ])
+        .split(inner);
+
+    frame.render_widget(
+        Paragraph::new(Line::from(banner_spans)).alignment(Alignment::Left),
+        cols[0],
+    );
+    frame.render_widget(Paragraph::new(hint).alignment(Alignment::Right), cols[1]);
 }
 
 // ---------------------------------------------------------------------------
@@ -825,6 +895,8 @@ fn event_phase(ev: &Event) -> Option<String> {
         | Event::PechLedger { phase, .. } => phase.clone(),
 
         Event::TaskUpdated { phase, .. } => phase.clone(),
+
+        Event::RequestApproval { phase, .. } => phase.clone(),
 
         Event::SessionStarted(p)
         | Event::SessionOpened(p)

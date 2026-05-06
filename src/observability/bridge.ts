@@ -15,6 +15,12 @@ import * as net from 'node:net';
 import * as fs from 'node:fs';
 import type { Bus } from '../bus/pubsub.js';
 import type { EnchantedEvent, Subscription } from '../bus/event-types.js';
+import {
+  ControlDispatcher,
+  DEFAULT_APPROVAL_TIMEOUT_MS,
+  type ApprovalResponse,
+  type ControlChannel,
+} from './control-protocol.js';
 
 /** Minimal one-line writer contract. Methods may return a Promise; the
  *  bridge awaits before writing the next line so backpressure is honored. */
@@ -202,6 +208,181 @@ export class TcpSink implements BridgeSink {
       if (!sock) return resolve();
       sock.end(() => resolve());
     });
+  }
+}
+
+/**
+ * Bidirectional TCP sink + control channel. Same as TcpSink for the outbound
+ * (write JSONL events) half, but also reads inbound JSONL lines from the same
+ * socket and feeds them into a ControlDispatcher.
+ *
+ * Producers use this exactly like TcpSink for emitting events; the
+ * orchestrator's trust-gate consults `awaitDecision()` when a request.approval
+ * needs a human verdict.
+ *
+ * Default-off contract: callers that don't need bidirectional behavior keep
+ * using TcpSink. Constructing a TcpControlSink is the explicit opt-in.
+ */
+export class TcpControlSink implements BridgeSink, ControlChannel {
+  private readonly host: string;
+  private readonly port: number;
+  private readonly logger: ErrorLogger;
+  private socket: net.Socket | null = null;
+  private connected = false;
+  private closed = false;
+  private retryDelay = 250;
+  private readonly retryCap = 30_000;
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly buf: string[] = [];
+  private readonly maxBuf = 200;
+  private readonly dispatcher = new ControlDispatcher();
+  private readBuffer = '';
+
+  constructor(host: string, port: number, logger: ErrorLogger = defaultLogger) {
+    this.host = host;
+    this.port = port;
+    this.logger = logger;
+    if (host !== '' && port !== 0) this.connect();
+  }
+
+  /** Inject a pre-paired socket. Used by tests with `net.createServer` so
+   *  the suite never depends on a real listener. */
+  static fromSocket(socket: net.Socket, logger: ErrorLogger = defaultLogger): TcpControlSink {
+    const inst = new TcpControlSink('', 0, logger);
+    inst.attachSocket(socket);
+    inst.connected = true;
+    return inst;
+  }
+
+  private connect(): void {
+    if (this.closed) return;
+    const sock = net.connect({ host: this.host, port: this.port });
+    this.attachSocket(sock);
+    sock.on('connect', () => {
+      this.connected = true;
+      this.retryDelay = 250;
+      while (this.buf.length > 0 && this.connected) {
+        const line = this.buf.shift();
+        if (line === undefined) break;
+        try {
+          sock.write(line);
+        } catch {
+          break;
+        }
+      }
+    });
+  }
+
+  private attachSocket(sock: net.Socket): void {
+    this.socket = sock;
+    sock.setEncoding('utf8');
+    sock.on('data', (chunk: string | Buffer) => {
+      const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+      this.readBuffer += text;
+      // Split out complete lines; keep the trailing partial in readBuffer.
+      let nl: number;
+      while ((nl = this.readBuffer.indexOf('\n')) !== -1) {
+        let line = this.readBuffer.slice(0, nl);
+        this.readBuffer = this.readBuffer.slice(nl + 1);
+        if (line.endsWith('\r')) line = line.slice(0, -1);
+        if (line.length === 0) continue;
+        const dispatched = this.dispatcher.dispatch(line);
+        if (!dispatched) {
+          // Unknown control line — log once at debug level. Keep going so
+          // future shapes don't break on first encounter.
+          this.logger('control channel: unrecognized inbound line', line);
+        }
+      }
+    });
+    sock.on('close', () => this.onClose());
+    sock.on('error', (err) => {
+      this.logger('tcp control sink error', err);
+    });
+  }
+
+  private onClose(): void {
+    this.connected = false;
+    this.socket = null;
+    if (this.closed) return;
+    if (this.retryTimer) return;
+    const delay = Math.min(this.retryDelay, this.retryCap);
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      this.retryDelay = Math.min(this.retryDelay * 2, this.retryCap);
+      // Only auto-reconnect if we were configured with host:port (not
+      // injected via fromSocket — those are owned by the test harness).
+      if (this.host !== '' && this.port !== 0) this.connect();
+    }, delay);
+  }
+
+  // BridgeSink ---------------------------------------------------------------
+  write(line: string): void | Promise<void> {
+    if (this.closed) return;
+    if (!this.connected || !this.socket) {
+      this.buf.push(line);
+      if (this.buf.length > this.maxBuf) this.buf.shift();
+      return;
+    }
+    return new Promise((resolve) => {
+      this.socket?.write(line, () => resolve());
+    });
+  }
+
+  end(): Promise<void> {
+    this.closed = true;
+    this.dispatcher.cancelAll('control channel closed');
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
+    return new Promise((resolve) => {
+      const sock = this.socket;
+      this.socket = null;
+      if (!sock || sock.destroyed) return resolve();
+      // Belt-and-suspenders: resolve on close OR end callback, whichever fires
+      // first. If the peer already destroyed the socket the end callback may
+      // never fire, but `close` will.
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        resolve();
+      };
+      sock.once('close', finish);
+      try {
+        sock.end(finish);
+      } catch {
+        finish();
+      }
+    });
+  }
+
+  // ControlChannel -----------------------------------------------------------
+  sendRequestApproval(req: {
+    correlation_id: string;
+    plugin: string;
+    reason: string;
+    phase: string;
+    payload?: Record<string, unknown>;
+    time?: number;
+  }): void | Promise<void> {
+    const record: Record<string, unknown> = {
+      type: 'request.approval',
+      time: req.time ?? Date.now() / 1000,
+      correlation_id: req.correlation_id,
+      plugin: req.plugin,
+      reason: req.reason,
+      phase: req.phase,
+    };
+    if (req.payload !== undefined) record.payload = req.payload;
+    return this.write(JSON.stringify(record) + '\n');
+  }
+
+  awaitDecision(
+    correlation_id: string,
+    timeoutMs: number = DEFAULT_APPROVAL_TIMEOUT_MS,
+  ): Promise<ApprovalResponse> {
+    return this.dispatcher.awaitDecision(correlation_id, timeoutMs);
   }
 }
 

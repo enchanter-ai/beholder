@@ -19,9 +19,10 @@ use crossterm::{
 use ratatui::{backend::CrosstermBackend, Frame, Terminal};
 use tokio::sync::mpsc;
 
+use crate::control::{ApprovalDecision, ControlCommand};
 use crate::event::Event;
 use crate::state::{AppState, Panel, View};
-use crate::transport::{Source as TSource, Transport};
+use crate::transport::{ControlWriter, Source as TSource, Transport};
 use crate::{Config, Source};
 
 /// Main entry point. Sets up the terminal, spawns transport + input + tick
@@ -43,12 +44,27 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
     let demo_mode = matches!(config.source, Source::Stdin) && io::stdin().is_terminal();
 
     // Build the unified event receiver — either from real transport or demo.
-    let mut event_rx: mpsc::Receiver<Event> = if demo_mode {
+    // The control writer is connected ONLY for `Source::SocketControl`; every
+    // other source path returns a disconnected writer so `send_control` errors
+    // visibly when the user tries to approve/veto on a read-only stream.
+    let (mut event_rx, control_writer): (mpsc::Receiver<Event>, ControlWriter) = if demo_mode {
         let (tx, rx) = mpsc::channel::<Event>(1024);
         crate::demo::spawn_demo_emitter(tx);
-        rx
+        (rx, ControlWriter::disconnected())
     } else {
-        Transport::spawn(map_source(config.source), 1024).into_receiver()
+        match config.source.clone() {
+            Source::SocketControl(_) => {
+                // try_spawn opens the socket eagerly so we surface failure
+                // before the TUI swallows the error.
+                let transport = Transport::try_spawn(map_source(config.source), 1024).await?;
+                let writer = transport.writer();
+                (transport.into_receiver(), writer)
+            }
+            _ => (
+                Transport::spawn(map_source(config.source), 1024).into_receiver(),
+                ControlWriter::disconnected(),
+            ),
+        }
     };
 
     // Keyboard: poll-on-blocking-thread, forward Crossterm events over a channel.
@@ -86,7 +102,7 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
 
             maybe_input = key_rx.recv() => {
                 let Some(input) = maybe_input else { break };
-                let outcome = handle_input(&mut app, input, &mut help_visible);
+                let outcome = handle_input(&mut app, input, &mut help_visible, &control_writer);
                 if matches!(outcome, InputOutcome::Quit) {
                     break;
                 }
@@ -137,6 +153,7 @@ fn map_source(s: Source) -> TSource {
         Source::Stdin => TSource::Stdin,
         Source::File(path) => TSource::File(path),
         Source::Socket(addr) => TSource::Socket(addr),
+        Source::SocketControl(addr) => TSource::SocketControl(addr),
     }
 }
 
@@ -276,7 +293,12 @@ pub enum InputOutcome {
     Quit,
 }
 
-fn handle_input(app: &mut AppState, ev: CtEvent, help_visible: &mut bool) -> InputOutcome {
+fn handle_input(
+    app: &mut AppState,
+    ev: CtEvent,
+    help_visible: &mut bool,
+    control_writer: &ControlWriter,
+) -> InputOutcome {
     match ev {
         CtEvent::Key(KeyEvent {
             code,
@@ -289,7 +311,7 @@ fn handle_input(app: &mut AppState, ev: CtEvent, help_visible: &mut bool) -> Inp
             if kind != KeyEventKind::Press && kind != KeyEventKind::Repeat {
                 return InputOutcome::Continue;
             }
-            handle_key(app, code, modifiers, help_visible)
+            handle_key(app, code, modifiers, help_visible, control_writer)
         }
         // Mouse / Resize / Paste events ignored for MVP.
         _ => InputOutcome::Continue,
@@ -301,10 +323,25 @@ fn handle_key(
     code: KeyCode,
     modifiers: KeyModifiers,
     help_visible: &mut bool,
+    control_writer: &ControlWriter,
 ) -> InputOutcome {
     // Ctrl-C is a hard quit regardless of other state.
     if matches!(code, KeyCode::Char('c')) && modifiers.contains(KeyModifiers::CONTROL) {
         return InputOutcome::Quit;
+    }
+
+    // v0.5 #4 — when an approval is pending, a/v consume it. We check this
+    // BEFORE the general key match so neither letter collides with future
+    // single-letter shortcuts ('a' is currently unbound, 'v' likewise).
+    if app.peek_pending_approval().is_some() {
+        if matches!(code, KeyCode::Char('a')) {
+            consume_and_send(app, control_writer, ApprovalDecision::Approve);
+            return InputOutcome::Continue;
+        }
+        if matches!(code, KeyCode::Char('v')) {
+            consume_and_send(app, control_writer, ApprovalDecision::Veto);
+            return InputOutcome::Continue;
+        }
     }
 
     match code {
@@ -439,11 +476,34 @@ fn adjust_selection(app: &mut AppState, delta: i32) {
 // Test-friendly pure key handler
 // ---------------------------------------------------------------------------
 
+/// Pop the head pending approval off the queue and serialize the decision
+/// over the control channel. Errors are logged but never propagated — the
+/// inspector is observability-tier; failed sends drop the banner anyway so
+/// the user can retry by triggering the request from the runtime.
+fn consume_and_send(
+    app: &mut AppState,
+    control_writer: &ControlWriter,
+    decision: ApprovalDecision,
+) {
+    let Some(req) = app.pending_approvals.pop_front() else {
+        return;
+    };
+    let cmd = ControlCommand::approval_response(req.correlation_id.clone(), decision, None);
+    let line = cmd.to_line();
+    let writer = control_writer.clone();
+    tokio::spawn(async move {
+        if let Err(err) = writer.send_control(&line).await {
+            tracing::warn!(%err, correlation_id = %req.correlation_id, "send_control failed");
+        }
+    });
+}
+
 /// Pure key handler for tests — no terminal, no async. Mirrors `handle_key`
 /// with no modifiers and a throwaway `help_visible` flag.
 pub fn handle_key_for_test(app: &mut AppState, code: KeyCode) -> InputOutcome {
     let mut help = false;
-    handle_key(app, code, KeyModifiers::NONE, &mut help)
+    let writer = ControlWriter::disconnected();
+    handle_key(app, code, KeyModifiers::NONE, &mut help, &writer)
 }
 
 // ---------------------------------------------------------------------------
@@ -482,12 +542,49 @@ mod tests {
     fn ctrl_c_quits() {
         let mut app = AppState::default();
         let mut help = false;
+        let writer = ControlWriter::disconnected();
         let outcome = handle_key(
             &mut app,
             KeyCode::Char('c'),
             KeyModifiers::CONTROL,
             &mut help,
+            &writer,
         );
         assert_eq!(outcome, InputOutcome::Quit);
+    }
+
+    #[tokio::test]
+    async fn a_consumes_pending_approval() {
+        use crate::state::PendingApproval;
+        let mut app = AppState::default();
+        app.push_pending_approval(PendingApproval {
+            correlation_id: "cid-test".into(),
+            plugin: "trust-pin".into(),
+            reason: "test".into(),
+            phase: Some("trust-gate".into()),
+            session_id: None,
+            received_at: 0.0,
+        });
+        assert_eq!(app.pending_approvals.len(), 1);
+        let outcome = handle_key_for_test(&mut app, KeyCode::Char('a'));
+        assert_eq!(outcome, InputOutcome::Continue);
+        assert_eq!(app.pending_approvals.len(), 0, "approve should pop the queue");
+    }
+
+    #[tokio::test]
+    async fn v_consumes_pending_approval() {
+        use crate::state::PendingApproval;
+        let mut app = AppState::default();
+        app.push_pending_approval(PendingApproval {
+            correlation_id: "cid-test".into(),
+            plugin: "trust-pin".into(),
+            reason: "test".into(),
+            phase: Some("trust-gate".into()),
+            session_id: None,
+            received_at: 0.0,
+        });
+        let outcome = handle_key_for_test(&mut app, KeyCode::Char('v'));
+        assert_eq!(outcome, InputOutcome::Continue);
+        assert_eq!(app.pending_approvals.len(), 0, "veto should pop the queue");
     }
 }

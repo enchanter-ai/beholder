@@ -12,6 +12,10 @@ import type { EnchantedEvent, PluginAck } from '../bus/event-types.js';
 import { TrustPinMismatchError } from '../registry/trust-pin.js';
 import type { TransportDescriptor } from '../transport/transport-descriptor.js';
 import {
+  DEFAULT_APPROVAL_TIMEOUT_MS,
+  type ControlChannel,
+} from '../observability/control-protocol.js';
+import {
   DEFAULT_PHASE_TIMEOUTS_MS,
   LIFECYCLE_PHASES,
   type LifecyclePhase,
@@ -75,6 +79,22 @@ export interface TrustGateHook {
 export interface RunOptions {
   readonly trustGateHook?: TrustGateHook;
   readonly transportDescriptor?: TransportDescriptor;
+  /**
+   * Optional bidirectional control channel (v0.5 #4). When attached, the
+   * trust-gate phase emits `request.approval` and AWAITS an inbound
+   * `approval.response` keyed by correlation_id before continuing. Default
+   * timeout: 30s, fail-closed (timeout → veto). Default-off: when
+   * `controlChannel` is undefined, trust-gate behaves identically to v0.4.
+   */
+  readonly controlChannel?: ControlChannel;
+  /** Override the 30s default. Test-only knob. */
+  readonly approvalTimeoutMs?: number;
+  /** Plugin label and reason for the approval request. */
+  readonly approvalRequest?: {
+    readonly plugin: string;
+    readonly reason: string;
+    readonly payload?: Record<string, unknown>;
+  };
 }
 
 export class Orchestrator {
@@ -150,6 +170,69 @@ export class Orchestrator {
           }
           throw err;
         }
+      }
+
+      // Trust-gate human-in-the-loop approval (v0.5 #4): if a control channel
+      // is attached, emit request.approval and await a matching response.
+      // Fail-closed: on timeout we treat it as a veto (operator intent: human
+      // present but didn't ack → don't proceed without consent).
+      if (phase === 'trust-gate' && options.controlChannel) {
+        const approvalReq = options.approvalRequest ?? {
+          plugin: 'trust-pin',
+          reason: 'human approval required for trust-gate',
+        };
+        try {
+          const sendResult = options.controlChannel.sendRequestApproval({
+            correlation_id: ctx.correlation_id,
+            plugin: approvalReq.plugin,
+            reason: approvalReq.reason,
+            phase: 'trust-gate',
+            payload: approvalReq.payload,
+          });
+          if (sendResult instanceof Promise) await sendResult;
+          // Also publish the same shape onto the bus so other observers see it.
+          await this.bus.publish('request.approval', {
+            correlation_id: ctx.correlation_id,
+            session_id: ctx.session_id,
+            phase: 'trust-gate',
+            source: approvalReq.plugin,
+            budget_tier: ctx.budget_tier,
+            payload: {
+              correlation_id: ctx.correlation_id,
+              plugin: approvalReq.plugin,
+              reason: approvalReq.reason,
+              ...(approvalReq.payload !== undefined ? { payload: approvalReq.payload } : {}),
+            },
+          });
+        } catch (err) {
+          // Sending the request failed — fail closed so we don't silently
+          // skip the human gate.
+          throw new SecurityVetoError(
+            approvalReq.plugin,
+            phase,
+            `failed to send approval request: ${(err as Error).message}`,
+          );
+        }
+        const timeoutMs = options.approvalTimeoutMs ?? DEFAULT_APPROVAL_TIMEOUT_MS;
+        let response;
+        try {
+          response = await options.controlChannel.awaitDecision(ctx.correlation_id, timeoutMs);
+        } catch (err) {
+          // Timeout or channel closure → fail closed (veto).
+          throw new SecurityVetoError(
+            approvalReq.plugin,
+            phase,
+            `approval timeout: ${(err as Error).message}`,
+          );
+        }
+        if (response.decision === 'veto') {
+          throw new SecurityVetoError(
+            approvalReq.plugin,
+            phase,
+            response.reason ?? 'inspector vetoed approval',
+          );
+        }
+        // approve → continue to next phase.
       }
 
       // Dispatch is the only phase that calls external transport.

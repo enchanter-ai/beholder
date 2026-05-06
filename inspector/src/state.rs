@@ -869,6 +869,19 @@ pub fn detect_env() -> String {
     std::env::var("ENCHANTER_ENV").unwrap_or_else(|_| "local".to_string())
 }
 
+/// Pending human-in-the-loop approval (v0.5 #4). Pushed onto
+/// `AppState::pending_approvals` when a `request.approval` event arrives;
+/// popped when the user keys `a` or `v` in the active view.
+#[derive(Debug, Clone)]
+pub struct PendingApproval {
+    pub correlation_id: String,
+    pub plugin: String,
+    pub reason: String,
+    pub phase: Option<String>,
+    pub session_id: Option<String>,
+    pub received_at: f64,
+}
+
 #[derive(Debug, Clone)]
 pub struct TaskState {
     pub task_id: String,
@@ -911,6 +924,11 @@ pub struct AppState {
     /// True when the inspector launched into the built-in demo emitter
     /// (no real event source on stdin / file / socket).
     pub demo_mode: bool,
+    /// v0.5 #4 — outstanding approval requests from the runtime, ordered
+    /// newest-first (most recent push goes to position 0). The active view's
+    /// banner shows the head; `a` / `v` keys consume head and serialize a
+    /// response over the bidirectional control channel.
+    pub pending_approvals: VecDeque<PendingApproval>,
 }
 
 impl AppState {
@@ -1412,6 +1430,26 @@ impl AppState {
                 }
             }
 
+            // ---- request.approval (v0.5 #4) ----------------------------
+            Event::RequestApproval {
+                correlation_id,
+                plugin,
+                reason,
+                phase,
+                session_id,
+                time,
+                ..
+            } => {
+                self.push_pending_approval(PendingApproval {
+                    correlation_id: correlation_id.clone(),
+                    plugin: plugin.clone(),
+                    reason: reason.clone(),
+                    phase: phase.clone(),
+                    session_id: session_id.clone(),
+                    received_at: *time,
+                });
+            }
+
             // ---- everything else ---------------------------------------
             _ => {}
         }
@@ -1491,6 +1529,26 @@ impl AppState {
     pub fn bump_tick(&mut self) {
         self.tick = self.tick.wrapping_add(1);
     }
+
+    /// Push a new pending approval onto the front of the queue (newest-first).
+    pub fn push_pending_approval(&mut self, req: PendingApproval) {
+        self.pending_approvals.push_front(req);
+    }
+
+    /// Remove and return the pending approval matching `correlation_id`.
+    /// O(n) but n is bounded by user attention — typically 0..3.
+    pub fn consume_approval(&mut self, correlation_id: &str) -> Option<PendingApproval> {
+        let idx = self
+            .pending_approvals
+            .iter()
+            .position(|p| p.correlation_id == correlation_id)?;
+        self.pending_approvals.remove(idx)
+    }
+
+    /// Peek the head pending approval (the one the banner displays).
+    pub fn peek_pending_approval(&self) -> Option<&PendingApproval> {
+        self.pending_approvals.front()
+    }
 }
 
 impl Default for AppState {
@@ -1539,6 +1597,7 @@ impl Default for AppState {
             started_at: chrono::Utc::now(),
             tick: 0,
             demo_mode: false,
+            pending_approvals: VecDeque::new(),
         }
     }
 }

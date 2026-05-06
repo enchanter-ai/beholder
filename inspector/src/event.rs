@@ -250,6 +250,23 @@ pub enum Event {
 
     #[serde(rename = "pr.created")]
     PrCreated(GenericPayload),
+
+    /// v0.5 #4 — runtime asks the inspector for a human approve/veto on the
+    /// trust-gate phase. Carries the `correlation_id` the inspector echoes
+    /// back inside an outbound `approval.response`.
+    #[serde(rename = "request.approval")]
+    RequestApproval {
+        correlation_id: String,
+        plugin: String,
+        reason: String,
+        time: f64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        phase: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        session_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        payload: Option<serde_json::Value>,
+    },
 }
 
 impl Event {
@@ -261,7 +278,8 @@ impl Event {
             | Event::HydraVeto { time, .. }
             | Event::PechLedger { time, .. }
             | Event::TaskUpdated { time, .. }
-            | Event::CodeModified { time, .. } => *time,
+            | Event::CodeModified { time, .. }
+            | Event::RequestApproval { time, .. } => *time,
 
             Event::SessionStarted(p)
             | Event::SessionOpened(p)
@@ -335,6 +353,7 @@ impl Event {
             Event::TestPassed(_) => "test.passed",
             Event::TestFailed(_) => "test.failed",
             Event::PrCreated(_) => "pr.created",
+            Event::RequestApproval { .. } => "request.approval",
         }
     }
 
@@ -344,6 +363,8 @@ impl Event {
             Event::ToolCall { plugin, .. }
             | Event::HydraVeto { plugin, .. }
             | Event::PechLedger { plugin, .. } => plugin.as_deref(),
+
+            Event::RequestApproval { plugin, .. } => Some(plugin.as_str()),
 
             Event::RuntimeMetrics { .. }
             | Event::TaskUpdated { .. }
@@ -388,7 +409,8 @@ impl Event {
             Event::ToolCall { session_id, .. }
             | Event::HydraVeto { session_id, .. }
             | Event::PechLedger { session_id, .. }
-            | Event::CodeModified { session_id, .. } => session_id.as_deref(),
+            | Event::CodeModified { session_id, .. }
+            | Event::RequestApproval { session_id, .. } => session_id.as_deref(),
 
             Event::TaskUpdated { session_id, .. } => Some(session_id.as_str()),
 
@@ -438,7 +460,7 @@ impl Event {
 
             Event::TaskUpdated { task_id, .. } => Some(task_id.as_str()),
 
-            Event::HydraVeto { .. } | Event::RuntimeMetrics { .. } => None,
+            Event::HydraVeto { .. } | Event::RuntimeMetrics { .. } | Event::RequestApproval { .. } => None,
 
             Event::SessionStarted(p)
             | Event::SessionOpened(p)
@@ -482,7 +504,8 @@ impl Event {
             | Event::ToolCall { .. }
             | Event::PechLedger { .. }
             | Event::TaskUpdated { .. }
-            | Event::CodeModified { .. } => None,
+            | Event::CodeModified { .. }
+            | Event::RequestApproval { .. } => None,
 
             Event::SessionStarted(p)
             | Event::SessionOpened(p)

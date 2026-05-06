@@ -9,12 +9,13 @@
 import type { JsonRpcMessage, JsonRpcRequest, JsonRpcResponse } from '../protocol/jsonrpc.js';
 import { JSONRPC_ERROR } from '../protocol/jsonrpc.js';
 import { NamespaceRegistry, type ToolSchema } from '../registry/namespace.js';
-import { Orchestrator } from '../orchestration/lifecycle.js';
+import { Orchestrator, type RunOptions, type TrustGateHook } from '../orchestration/lifecycle.js';
 import { createRequestContext, type BudgetTier } from '../orchestration/request-context.js';
 import { InProcessBus } from '../bus/pubsub.js';
 import type { PluginAdapter } from '../plugins/plugin-contract.js';
 import { enforceTrustPin, type TrustPinInputs, type TrustPinStore } from '../registry/trust-pin.js';
 import type { TransportDescriptor } from '../transport/transport-descriptor.js';
+import type { ControlChannel } from '../observability/control-protocol.js';
 
 export interface Transport {
   send(msg: JsonRpcMessage): Promise<void>;
@@ -66,6 +67,16 @@ export interface McpClientConfig {
    * from `src/transport/transport-descriptor.ts`.
    */
   readonly transportDescriptor?: TransportDescriptor;
+  /**
+   * Optional bidirectional control channel for human-in-the-loop trust-gate
+   * approvals (v0.5 #4). When attached, every tools/call's trust-gate phase
+   * emits a `request.approval` event over the channel and awaits the
+   * inspector's `approve` / `veto` decision. Default-off: undefined →
+   * trust-gate behaves identically to v0.4.
+   */
+  readonly controlChannel?: ControlChannel;
+  /** Override the 30s approval await default. Test-only knob. */
+  readonly approvalTimeoutMs?: number;
 }
 
 /**
@@ -116,6 +127,8 @@ export class McpClient {
   private readonly trustPinStore?: TrustPinStore;
   private readonly serverUrl?: string;
   private readonly transportDescriptor?: TransportDescriptor;
+  private readonly controlChannel?: ControlChannel;
+  private readonly approvalTimeoutMs?: number;
   private nextRequestId = 1;
   private readonly pending = new Map<
     number | string,
@@ -131,6 +144,8 @@ export class McpClient {
     this.trustPinStore = config.trustPinStore;
     this.serverUrl = config.serverUrl;
     this.transportDescriptor = config.transportDescriptor;
+    this.controlChannel = config.controlChannel;
+    this.approvalTimeoutMs = config.approvalTimeoutMs;
     this.registry = new NamespaceRegistry();
     this.bus = config.bus ?? new InProcessBus();
 
@@ -273,12 +288,32 @@ export class McpClient {
         });
         return resp.result;
       },
-      trustGateHook
-        ? this.transportDescriptor
-          ? { trustGateHook, transportDescriptor: this.transportDescriptor }
-          : { trustGateHook }
-        : {},
+      this.buildRunOptions(trustGateHook, ident.bare_name, args),
     );
+  }
+
+  /** Compose RunOptions, layering in transportDescriptor + controlChannel
+   *  only when configured. Keeps the call site readable. */
+  private buildRunOptions(
+    trustGateHook: TrustGateHook | undefined,
+    toolName: string,
+    args: Record<string, unknown>,
+  ): RunOptions {
+    const base: Record<string, unknown> = {};
+    if (trustGateHook) base.trustGateHook = trustGateHook;
+    if (this.transportDescriptor) base.transportDescriptor = this.transportDescriptor;
+    if (this.controlChannel) {
+      base.controlChannel = this.controlChannel;
+      base.approvalRequest = {
+        plugin: 'trust-pin',
+        reason: `human approval for ${toolName}`,
+        payload: { tool: toolName, args, server_id: this.serverId },
+      };
+      if (this.approvalTimeoutMs !== undefined) {
+        base.approvalTimeoutMs = this.approvalTimeoutMs;
+      }
+    }
+    return base as RunOptions;
   }
 
   /** Publish a synthetic trust-gate event (used by tests + power-user paths). */
