@@ -1040,7 +1040,12 @@ impl AppState {
         self.health.memory_pct =
             (self.events.len() as f32 / EVENT_RING_CAPACITY as f32) * 100.0;
 
-        // Sliding window: last 50 events → 49 interarrival deltas (ms).
+        // Sliding window: last 50 events → up to 49 interarrival deltas (ms).
+        // Filter out idle gaps (>100ms) so the metric reflects burst-mode
+        // event processing instead of producer pacing. A wire-time gap of
+        // 1.2s between loop iterations isn't "latency" — it's the producer
+        // sleeping. Only intra-burst deltas inform the actual processing
+        // signal we want to surface.
         let window = 50usize;
         let n = self.events.len().min(window);
         if n >= 2 {
@@ -1051,18 +1056,17 @@ impl AppState {
                 .skip(take)
                 .map(|e| e.time())
                 .collect();
-            let mut deltas_ms: Vec<f32> = Vec::with_capacity(times.len().saturating_sub(1));
-            for w in times.windows(2) {
-                let d = (w[1] - w[0]).max(0.0) * 1000.0;
-                deltas_ms.push(d as f32);
-            }
+            let burst_deltas_ms: Vec<f32> = times
+                .windows(2)
+                .map(|w| ((w[1] - w[0]).max(0.0) * 1000.0) as f32)
+                .filter(|d| *d <= 100.0) // exclude inter-burst idle gaps
+                .collect();
 
-            if !deltas_ms.is_empty() {
+            if !burst_deltas_ms.is_empty() {
                 let mean_ms: f32 =
-                    deltas_ms.iter().copied().sum::<f32>() / deltas_ms.len() as f32;
-                let avg_capped = mean_ms.min(100.0);
+                    burst_deltas_ms.iter().copied().sum::<f32>() / burst_deltas_ms.len() as f32;
 
-                let mut sorted = deltas_ms.clone();
+                let mut sorted = burst_deltas_ms.clone();
                 sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
                 let p_idx = |p: f32| -> usize {
                     let len = sorted.len();
@@ -1074,7 +1078,10 @@ impl AppState {
 
                 self.metrics.p95_latency_ms = p95;
                 self.metrics.p99_latency_ms = p99;
-                self.health.event_loop_ms = avg_capped;
+                self.health.event_loop_ms = mean_ms;
+            } else {
+                // No burst-deltas — events arriving spaced apart. Keep prior
+                // values rather than zeroing out (looks more stable).
             }
 
             // CPU synthesis: events-per-second normalized against a 100/s
@@ -1100,6 +1107,32 @@ impl AppState {
         if self.health.network_mbps == 0.0 {
             self.health.network_mbps = 23.0;
         }
+
+        // Spend rate: per-hour extrapolation of session spend. Uptime read
+        // off the started_at instant; use a tiny floor (0.001 hr) to avoid
+        // divide-by-zero in the first second.
+        let uptime_hours =
+            (chrono::Utc::now() - self.started_at).num_milliseconds() as f64 / 3_600_000.0;
+        let h = uptime_hours.max(0.001);
+        self.metrics.spend_rate_per_hour_usd = self.metrics.spent_session_usd / h;
+
+        // Derive ongoing_tasks from `app.tasks` rather than trusting
+        // wire-side runtime.metrics heartbeats — keeps RUNTIME and SYSTEM
+        // HEALTH in agreement with the same task-state filter.
+        let ongoing = self
+            .tasks
+            .iter()
+            .filter(|t| {
+                matches!(
+                    t.status,
+                    TaskStatus::Running
+                        | TaskStatus::WaitingTool
+                        | TaskStatus::WaitingReview
+                        | TaskStatus::Queued
+                )
+            })
+            .count() as u32;
+        self.runtime_metrics.ongoing_tasks = ongoing;
     }
 
     /// Rebuild the insights vector from current state.
@@ -1474,9 +1507,9 @@ impl AppState {
                         t.status = TaskStatus::Completed;
                         t.updated_at = p.time;
                     }
-                    if self.session.active_task_id.as_deref() == Some(task_id) {
-                        self.session.active_task_id = None;
-                    }
+                    // Don't clear active_task_id — keep the most-recent task
+                    // visible in the ACTIVE SESSION box. Otherwise the cell
+                    // bounces between "T-104 …" and "(idle)" every cycle.
                 }
                 self.runtime_metrics.successful_tasks_lifetime = self
                     .runtime_metrics
@@ -1569,8 +1602,16 @@ impl AppState {
             }
         }
 
-        // Bump per-plugin last_event timestamp so the overview can render
-        // a "last seen" column. Done before push_event so the borrow is local.
+        // Bump per-plugin last_event AND calls so the overview's PLUGINS
+        // table reflects activity. Typed variant handlers above set
+        // display_value but don't touch the counters — they rely on this
+        // generic block.
+        //
+        // For Event::Unknown, apply_unknown already bumped calls in its
+        // per-plugin branches — double-counting would inflate every counter
+        // for unknown-discriminator events. last_event still updates here
+        // (apply_unknown's branches don't all set it explicitly).
+        let is_unknown = matches!(ev, Event::Unknown(_));
         if let Some(name) = ev.plugin() {
             let needle = name.to_ascii_lowercase();
             let t = ev.time();
@@ -1580,6 +1621,9 @@ impl AppState {
                 .find(|p| p.name.to_ascii_lowercase() == needle)
             {
                 p.last_event = Some(t);
+                if !is_unknown {
+                    p.calls = p.calls.saturating_add(1);
+                }
             }
         }
 
@@ -2654,7 +2698,11 @@ mod tests {
             ],
         ));
         assert_eq!(s.runtime_metrics.open_sessions, 2);
-        assert_eq!(s.runtime_metrics.ongoing_tasks, 3);
+        // ongoing_tasks is now derived from app.tasks in synthesize_health
+        // — wire-side runtime.metrics no longer authoritatively sets it
+        // (the wire and the local task tracker were drifting). Empty
+        // app.tasks here so the derived count is 0.
+        assert_eq!(s.runtime_metrics.ongoing_tasks, 0);
         assert_eq!(s.runtime_metrics.code_written_lifetime_loc, 42800);
         assert_eq!(s.runtime_metrics.tool_calls_lifetime, 9001);
         assert!((s.runtime_metrics.tests_passed_rate - 0.94).abs() < 1e-3);

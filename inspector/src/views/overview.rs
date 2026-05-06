@@ -486,7 +486,10 @@ fn render_system_health(frame: &mut Frame, area: Rect, app: &AppState) {
         .filter(|t| {
             matches!(
                 t.status,
-                TaskStatus::Running | TaskStatus::WaitingTool | TaskStatus::WaitingReview
+                TaskStatus::Running
+                    | TaskStatus::WaitingTool
+                    | TaskStatus::WaitingReview
+                    | TaskStatus::Queued
             )
         })
         .count();
