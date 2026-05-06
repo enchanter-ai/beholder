@@ -1056,11 +1056,39 @@ impl AppState {
                 .skip(take)
                 .map(|e| e.time())
                 .collect();
-            let burst_deltas_ms: Vec<f32> = times
-                .windows(2)
-                .map(|w| ((w[1] - w[0]).max(0.0) * 1000.0) as f32)
-                .filter(|d| *d <= 100.0) // exclude inter-burst idle gaps
+
+            // Prefer real per-tool-call `duration_ms` reported by the Claude
+            // Code hook emitter: when present, those are ground truth and
+            // beat event-interarrival synthesis. Fall back to interarrivals
+            // only when no real durations are available in the window.
+            let recent_durations_ms: Vec<f32> = self
+                .events
+                .iter()
+                .skip(take)
+                .filter_map(|e| {
+                    let p = match e {
+                        Event::Unknown(p) => p,
+                        Event::ToolResult(p) => p,
+                        _ => return None,
+                    };
+                    p.extra
+                        .get("payload")
+                        .and_then(|v| v.get("duration_ms"))
+                        .and_then(|v| v.as_f64())
+                        .map(|d| d as f32)
+                        .filter(|d| *d > 0.0)
+                })
                 .collect();
+
+            let burst_deltas_ms: Vec<f32> = if !recent_durations_ms.is_empty() {
+                recent_durations_ms
+            } else {
+                times
+                    .windows(2)
+                    .map(|w| ((w[1] - w[0]).max(0.0) * 1000.0) as f32)
+                    .filter(|d| *d <= 100.0)
+                    .collect()
+            };
 
             if !burst_deltas_ms.is_empty() {
                 let mean_ms: f32 =

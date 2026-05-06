@@ -248,8 +248,33 @@ function makeFreshState(sessionId) {
     anchor_intent: '',
     last_prompt_text: '',
     started_at: nowSec(),
-    // Counter so gorgon emits roughly every 5 events (rate limit).
     gorgon_tick: 0,
+    // Throttle for runtime.metrics heartbeat — emit every Nth PostToolUse.
+    metrics_tick: 0,
+    // Single-slot timing: pre_time stamped on PreToolUse, consumed on
+    // PostToolUse to compute real duration_ms. Single slot is enough since
+    // Claude Code calls tools serially in one session.
+    pre_time: 0,
+    pre_tool: '',
+    // Inflight count — bumped on Pre, decremented on Post. Surfaces as
+    // `tasks_active` in runtime.metrics so the cockpit shows non-zero while
+    // a tool call is in progress.
+    inflight_tools: 0,
+    // Lifetime accumulators for runtime.metrics heartbeat.
+    code_lines_added: 0,
+    code_lines_removed: 0,
+    files_modified: [], // array (serialised); used as Set on read
+    files_created: [],
+    pr_count: 0,
+    tests_run: 0,
+    tests_passed: 0,
+    // Pech ledger — last seen byte offset into the active transcript and
+    // cumulative session totals scanned from it.
+    transcript_path: '',
+    transcript_offset: 0,
+    session_input_tokens: 0,
+    session_output_tokens: 0,
+    session_cost_usd: 0,
   };
 }
 
@@ -319,6 +344,144 @@ function extractFilePath(toolName, toolInput) {
     if (typeof v === 'string' && v.length > 0) return v;
   }
   return null;
+}
+
+// ----------------------------------------------------------------------------
+// Hydra CWE pattern scan — runs over Bash commands at PreToolUse. Patterns
+// follow the same shape as src/plugins/hydra.adapter.ts so the cockpit's
+// security counter ticks for the same hazards in real Claude Code work.
+// ----------------------------------------------------------------------------
+const HYDRA_PATTERNS = [
+  {
+    id: 'cwe-78-rm-rf-root',
+    cve_anchor: 'CWE-78: OS Command Injection',
+    severity: 'critical',
+    re: /\brm\s+(-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*|-[a-zA-Z]*f[a-zA-Z]*r[a-zA-Z]*|-rf|-fr)\s+(\/(\s|$|\*)|~|\$HOME|\$\{HOME\})/,
+  },
+  {
+    id: 'cwe-94-curl-pipe-shell',
+    cve_anchor: 'CWE-94: Code Injection',
+    severity: 'high',
+    re: /\b(curl|wget)\b[^|]*\|\s*(sh|bash|zsh|fish)\b/,
+  },
+  {
+    id: 'cwe-200-private-key-read',
+    cve_anchor: 'CWE-200: Information Exposure',
+    severity: 'high',
+    re: /\b(cat|less|more|head|tail|type)\b[^;|&]*\b(\.ssh\/id_(rsa|ed25519|ecdsa|dsa)|\.aws\/credentials|\.gnupg\/.+\.key)\b/,
+  },
+  {
+    id: 'cwe-732-force-push',
+    cve_anchor: 'CWE-732: Incorrect Permission Assignment',
+    severity: 'medium',
+    re: /\bgit\s+push\s+(-[a-zA-Z]*f|--force|--force-with-lease)\b/,
+  },
+  {
+    id: 'cwe-732-chmod-777',
+    cve_anchor: 'CWE-732: Incorrect Permission Assignment',
+    severity: 'medium',
+    re: /\bchmod\s+(-R\s+)?(777|666|a\+rwx|o\+rwx)\b/,
+  },
+];
+
+function scanHydra(command) {
+  if (typeof command !== 'string' || command.length === 0) return null;
+  for (const p of HYDRA_PATTERNS) {
+    if (p.re.test(command)) return p;
+  }
+  return null;
+}
+
+// Detect test-runner invocations in Bash commands.
+const TEST_CMD_RE = /\b(npm\s+(run\s+)?test|pnpm\s+(run\s+)?test|yarn\s+(run\s+)?test|jest|vitest|pytest|cargo\s+test|go\s+test|mvn\s+test|gradle\s+test|rspec|mocha|playwright)\b/;
+function isTestCommand(command) {
+  return typeof command === 'string' && TEST_CMD_RE.test(command);
+}
+
+// Detect `gh pr create` (PR creation).
+function isPrCreate(command) {
+  return typeof command === 'string' && /\bgh\s+pr\s+create\b/.test(command);
+}
+
+// Count newlines in a string.
+function lineCount(s) {
+  if (typeof s !== 'string' || s.length === 0) return 0;
+  let n = 1;
+  for (let i = 0; i < s.length; i++) if (s.charCodeAt(i) === 10) n += 1;
+  return n;
+}
+
+// ----------------------------------------------------------------------------
+// Transcript scan — Claude Code writes the full session JSONL to
+// payload.transcript_path on Stop / SessionEnd. Each line carries a `message`
+// with usage `{input_tokens, output_tokens, cache_*}` and (newer Claude
+// versions) `costUSD`. We scan from the last seen byte offset and append
+// only the delta to keep cost monotonically increasing.
+// ----------------------------------------------------------------------------
+function scanTranscript(transcriptPath, fromOffset) {
+  const result = { input: 0, output: 0, cost: 0, newOffset: fromOffset };
+  if (typeof transcriptPath !== 'string' || transcriptPath.length === 0) {
+    return result;
+  }
+  let st;
+  try {
+    st = fs.statSync(transcriptPath);
+  } catch {
+    return result;
+  }
+  // If transcript was rotated/truncated below fromOffset, restart from 0.
+  let start = fromOffset;
+  if (st.size < fromOffset) start = 0;
+  if (st.size <= start) {
+    result.newOffset = st.size;
+    return result;
+  }
+  let buf;
+  try {
+    const fd = fs.openSync(transcriptPath, 'r');
+    try {
+      const len = st.size - start;
+      buf = Buffer.alloc(len);
+      fs.readSync(fd, buf, 0, len, start);
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch (err) {
+    logError('transcript read failed', err);
+    return result;
+  }
+  result.newOffset = st.size;
+  const text = buf.toString('utf8');
+  const lines = text.split('\n');
+  for (const line of lines) {
+    if (!line) continue;
+    let row;
+    try {
+      row = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    // Claude Code transcript shapes vary; usage lives under message.usage
+    // for assistant turns. costUSD appears at the top level on newer builds.
+    const usage =
+      (row && row.message && row.message.usage) ||
+      (row && row.usage) ||
+      null;
+    if (usage && typeof usage === 'object') {
+      const i = Number(usage.input_tokens ?? usage.prompt_tokens ?? 0);
+      const o = Number(usage.output_tokens ?? usage.completion_tokens ?? 0);
+      if (Number.isFinite(i) && i > 0) result.input += i;
+      if (Number.isFinite(o) && o > 0) result.output += o;
+      // Cache-creation/read tokens count toward input for budget purposes.
+      const cc = Number(usage.cache_creation_input_tokens ?? 0);
+      const cr = Number(usage.cache_read_input_tokens ?? 0);
+      if (Number.isFinite(cc) && cc > 0) result.input += cc;
+      if (Number.isFinite(cr) && cr > 0) result.input += cr;
+    }
+    const cost = Number(row && (row.costUSD ?? row.cost_usd ?? 0));
+    if (Number.isFinite(cost) && cost > 0) result.cost += cost;
+  }
+  return result;
 }
 
 // Inspect tool_response for an error signal.
@@ -432,8 +595,34 @@ function emitForHook(eventName, payload) {
         }),
       );
 
+      // Hydra CWE scan — Bash only. Emits hydra.veto.fired on a hit; the
+      // inspector's apply_unknown branch increments security_incidents_session
+      // and bumps the hydra plugin's call counter.
+      if (toolName === 'Bash' && toolInput && typeof toolInput === 'object') {
+        const cmd = typeof toolInput.command === 'string' ? toolInput.command : '';
+        const hit = scanHydra(cmd);
+        if (hit) {
+          appendEvent(
+            base({
+              type: 'hydra.veto.fired',
+              plugin: 'hydra',
+              phase: 'trust-gate',
+              severity: hit.severity,
+              pattern_id: hit.id,
+              cve_anchor: hit.cve_anchor,
+              tool: toolName,
+              payload: { command: truncStr(cmd) },
+            }),
+          );
+        }
+      }
+
       // Derived plugin events ----------------------------------------------
       const state = readState(session_id);
+      // Stamp pre_time + tool name so PostToolUse can compute duration_ms.
+      state.pre_time = time;
+      state.pre_tool = toolName;
+      state.inflight_tools = (state.inflight_tools || 0) + 1;
       const total = (state.tool_counts[toolName] || 0) + 1;
       const errors = state.tool_errors[toolName] || 0;
       state.tool_counts[toolName] = total;
@@ -467,12 +656,21 @@ function emitForHook(eventName, payload) {
     case 'PostToolUse': {
       const toolName = typeof payload.tool_name === 'string' ? payload.tool_name : 'unknown';
       const response = payload.tool_response ?? payload.response ?? {};
+      // Read state up front — we need pre_time to derive a real duration when
+      // Claude Code itself doesn't surface one in the hook payload.
+      const stateForDuration = readState(session_id);
+      const preTime =
+        stateForDuration.pre_tool === toolName && stateForDuration.pre_time > 0
+          ? stateForDuration.pre_time
+          : 0;
+      const derivedDurationMs =
+        preTime > 0 ? Math.max(0, Math.round((time - preTime) * 1000)) : undefined;
       const durationMs =
         typeof payload.duration_ms === 'number'
           ? payload.duration_ms
           : typeof payload.duration === 'number'
             ? payload.duration
-            : undefined;
+            : derivedDurationMs;
       // Output character count — best-effort across Claude Code's various
       // response shapes (string content / structured object / wrapped).
       let outputChars = 0;
@@ -518,7 +716,12 @@ function emitForHook(eventName, payload) {
       }
 
       // Derived plugin events ----------------------------------------------
-      const state = readState(session_id);
+      // Reuse the state we already loaded for duration computation.
+      const state = stateForDuration;
+      // Clear pre_time slot now that this tool's bracket is closed.
+      state.pre_time = 0;
+      state.pre_tool = '';
+      if ((state.inflight_tools || 0) > 0) state.inflight_tools -= 1;
 
       // Bump error counter if the tool failed — this feeds the next call's
       // crow posterior_mean.
@@ -526,9 +729,35 @@ function emitForHook(eventName, payload) {
         state.tool_errors[toolName] = (state.tool_errors[toolName] || 0) + 1;
       }
 
-      const filePath = extractFilePath(toolName, payload.tool_input);
+      const toolInput = payload.tool_input || {};
+      const filePath = extractFilePath(toolName, toolInput);
       const isMutator = toolName === 'Edit' || toolName === 'Write';
       const isReader = toolName === 'Read';
+
+      // ---- LOC + file-modified accumulation (drives runtime.metrics) -----
+      if (filePath) {
+        if (toolName === 'Write') {
+          if (!state.files_created.includes(filePath)) state.files_created.push(filePath);
+          state.code_lines_added += lineCount(toolInput.content);
+        } else if (toolName === 'Edit') {
+          if (!state.files_modified.includes(filePath)) state.files_modified.push(filePath);
+          const before = lineCount(toolInput.old_string);
+          const after = lineCount(toolInput.new_string);
+          if (after >= before) state.code_lines_added += after - before;
+          else state.code_lines_removed += before - after;
+        }
+      }
+
+      // ---- Bash classifier (tests / PRs) ---------------------------------
+      if (toolName === 'Bash' && typeof toolInput.command === 'string') {
+        if (isTestCommand(toolInput.command)) {
+          state.tests_run += 1;
+          if (!isErrorResponse(response)) state.tests_passed += 1;
+        }
+        if (isPrCreate(toolInput.command) && !isErrorResponse(response)) {
+          state.pr_count += 1;
+        }
+      }
 
       // gorgon.hotspot — rate-limited to ~once every 5 hooks. Reports the
       // currently-hottest file from accumulated access counts. Skipped when
@@ -586,6 +815,38 @@ function emitForHook(eventName, payload) {
         }
       }
 
+      // ---- runtime.metrics heartbeat (every 5th PostToolUse) -------------
+      // Folded right here (not on a timer) so it stays stdlib-only and
+      // emits exactly when something changed. The inspector's apply_unknown
+      // path (state.rs:1834) reads every field off `extra`.
+      state.metrics_tick = (state.metrics_tick || 0) + 1;
+      if (state.metrics_tick % 5 === 0) {
+        const totalToolCalls = Object.values(state.tool_counts).reduce((s, n) => s + n, 0);
+        const testsRun = state.tests_run || 0;
+        const testsPassed = state.tests_passed || 0;
+        const passedRate = testsRun > 0 ? testsPassed / testsRun : 0;
+        appendEvent(
+          base({
+            type: 'runtime.metrics',
+            plugin: 'orchestrator',
+            phase: 'cross-session',
+            open_sessions: 1,
+            ongoing_tasks: state.inflight_tools || 0,
+            queued_tasks: 0,
+            blocked_tasks: 0,
+            tool_calls_lifetime: totalToolCalls,
+            files_created_lifetime: state.files_created.length,
+            files_modified_lifetime: state.files_modified.length,
+            code_written_lifetime_loc: state.code_lines_added,
+            code_modified_lifetime_loc: state.code_lines_removed,
+            prs_created_lifetime: state.pr_count || 0,
+            tests_run_lifetime: testsRun,
+            tests_passed_rate: passedRate,
+            total_spend_lifetime: state.session_cost_usd || 0,
+          }),
+        );
+      }
+
       writeState(state);
       break;
     }
@@ -605,6 +866,41 @@ function emitForHook(eventName, payload) {
 
     case 'Stop': {
       appendEvent(base({ type: 'lifecycle.post-session', phase: 'post-session' }));
+      // Pech ledger: scan the Claude Code transcript JSONL for real token +
+      // cost data and emit the cumulative session totals. payload.transcript_path
+      // is provided by Claude Code on Stop / SessionEnd / SubagentStop hooks.
+      // We track byte offset to avoid re-summing across multiple Stops in one
+      // long session.
+      const transcriptPath =
+        typeof payload.transcript_path === 'string' ? payload.transcript_path : '';
+      if (transcriptPath) {
+        const state = readState(session_id);
+        // Reset the offset if Claude Code switched transcripts (rare).
+        if (state.transcript_path !== transcriptPath) {
+          state.transcript_path = transcriptPath;
+          state.transcript_offset = 0;
+        }
+        const delta = scanTranscript(transcriptPath, state.transcript_offset);
+        if (delta.input > 0 || delta.output > 0 || delta.cost > 0) {
+          state.session_input_tokens += delta.input;
+          state.session_output_tokens += delta.output;
+          state.session_cost_usd += delta.cost;
+          appendEvent(
+            base({
+              type: 'pech.ledger.appended',
+              plugin: 'pech',
+              phase: 'post-session',
+              input_tokens: delta.input,
+              output_tokens: delta.output,
+              cost_usd: delta.cost,
+              session_cost_usd: state.session_cost_usd,
+              daily_cost_usd: state.session_cost_usd,
+            }),
+          );
+        }
+        state.transcript_offset = delta.newOffset;
+        writeState(state);
+      }
       break;
     }
 
