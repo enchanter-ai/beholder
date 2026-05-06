@@ -236,29 +236,49 @@ async fn run_socket(addr: String, tx: mpsc::Sender<Event>) {
     }
 }
 
+/// Resolve the path to the runtime-stderr log. Best-effort.
+fn runtime_log_path() -> Option<PathBuf> {
+    let base = std::env::var_os("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("LOCALAPPDATA").map(PathBuf::from))
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))
+        .unwrap_or_else(std::env::temp_dir);
+    Some(base.join("enchanter").join("runtime.log"))
+}
+
 /// Spawn an arbitrary shell command and stream its stdout as JSONL events.
-/// Stderr is inherited so the user sees producer banners alongside the TUI.
+/// Stderr is captured to a log file (NOT inherited) — inheriting writes to
+/// the same TTY the TUI's alternate-screen owns, smearing the cockpit on
+/// any npm-install / npx-cache output. Log path: `<cache>/enchanter/runtime.log`,
+/// where `<cache>` is `XDG_CACHE_HOME` / `LOCALAPPDATA` / `HOME/.cache` /
+/// the system temp dir, in that order.
 async fn run_exec(cmd: String, tx: mpsc::Sender<Event>) {
     use std::process::Stdio;
+    use tokio::io::AsyncReadExt as _;
     use tokio::process::Command;
 
-    // Pick the platform shell. PowerShell isn't strictly needed for a single
-    // `<cmd> | <inspector>`-style command — `cmd /c` and `sh -c` both handle
-    // the supplied string verbatim including pipes, redirections, env-var
-    // assignments, etc.
+    // Resolve the runtime-log path. Best-effort — fall back to discarding
+    // stderr if we can't open the file.
+    let log_path = runtime_log_path();
+    if let Some(ref p) = log_path {
+        if let Some(parent) = p.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+    }
+
     let mut child = if cfg!(windows) {
         Command::new("cmd")
             .arg("/c")
             .arg(&cmd)
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
+            .stderr(Stdio::piped())
             .spawn()
     } else {
         Command::new("sh")
             .arg("-c")
             .arg(&cmd)
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
+            .stderr(Stdio::piped())
             .spawn()
     }
     .map_err(|e| {
@@ -270,6 +290,42 @@ async fn run_exec(cmd: String, tx: mpsc::Sender<Event>) {
         // spawn failed; tx drops, consumer sees None.
         return;
     };
+
+    // Drain the child's stderr into the runtime log so npm-install / npx /
+    // tsx noise doesn't smear the TUI. Spawned as its own task so it runs
+    // concurrently with stdout reading.
+    if let Some(stderr) = child.as_mut().and_then(|c| c.stderr.take()) {
+        let log_path = log_path.clone();
+        tokio::spawn(async move {
+            use tokio::fs::OpenOptions;
+            use tokio::io::AsyncWriteExt as _;
+            let mut file = match log_path {
+                Some(p) => OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(p)
+                    .await
+                    .ok(),
+                None => None,
+            };
+            let mut reader = stderr;
+            let mut buf = [0u8; 4096];
+            loop {
+                match reader.read(&mut buf).await {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        if let Some(f) = file.as_mut() {
+                            let _ = f.write_all(&buf[..n]).await;
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+            if let Some(mut f) = file {
+                let _ = f.flush().await;
+            }
+        });
+    }
 
     let reader = BufReader::new(stdout);
     forward_lines(reader, tx, "exec").await;
