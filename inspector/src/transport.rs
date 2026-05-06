@@ -32,6 +32,11 @@ pub enum Source {
     /// `--control-socket` so plain `--socket` callers stay read-only and
     /// back-compatible.
     SocketControl(String),
+    /// Spawn an arbitrary command and consume its stdout as JSONL events.
+    /// On Windows, runs via `cmd /c <cmd>`; elsewhere via `sh -c <cmd>`.
+    /// The child's stderr is forwarded to the inspector's stderr so the
+    /// user can see banners/errors from the producer alongside the cockpit.
+    Exec(String),
 }
 
 /// Outbound control half of a bidirectional transport. Cheap to clone — wraps
@@ -118,6 +123,9 @@ impl Transport {
                     "Source::SocketControl spawned via Transport::spawn — control writer disconnected; use try_spawn"
                 );
             }
+            Source::Exec(cmd) => {
+                tokio::spawn(run_exec(cmd, tx));
+            }
         }
 
         Transport {
@@ -159,6 +167,10 @@ impl Transport {
                 let reader = BufReader::new(read_half);
                 tokio::spawn(forward_lines(reader, tx, "socket-control"));
                 ControlWriter::from_half(write_half)
+            }
+            Source::Exec(cmd) => {
+                tokio::spawn(run_exec(cmd, tx));
+                ControlWriter::disconnected()
             }
         };
 
@@ -220,6 +232,54 @@ async fn run_socket(addr: String, tx: mpsc::Sender<Event>) {
         }
         Err(err) => {
             tracing::error!(%addr, %err, "transport socket connect failed");
+        }
+    }
+}
+
+/// Spawn an arbitrary shell command and stream its stdout as JSONL events.
+/// Stderr is inherited so the user sees producer banners alongside the TUI.
+async fn run_exec(cmd: String, tx: mpsc::Sender<Event>) {
+    use std::process::Stdio;
+    use tokio::process::Command;
+
+    // Pick the platform shell. PowerShell isn't strictly needed for a single
+    // `<cmd> | <inspector>`-style command — `cmd /c` and `sh -c` both handle
+    // the supplied string verbatim including pipes, redirections, env-var
+    // assignments, etc.
+    let mut child = if cfg!(windows) {
+        Command::new("cmd")
+            .arg("/c")
+            .arg(&cmd)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()
+    } else {
+        Command::new("sh")
+            .arg("-c")
+            .arg(&cmd)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()
+    }
+    .map_err(|e| {
+        tracing::error!(%cmd, err=%e, "transport exec spawn failed");
+    })
+    .ok();
+
+    let Some(stdout) = child.as_mut().and_then(|c| c.stdout.take()) else {
+        // spawn failed; tx drops, consumer sees None.
+        return;
+    };
+
+    let reader = BufReader::new(stdout);
+    forward_lines(reader, tx, "exec").await;
+
+    // Reap the child so we don't leak zombies on shutdown.
+    if let Some(mut c) = child {
+        if let Ok(Some(_)) = c.try_wait() {
+            // already exited
+        } else {
+            let _ = c.kill().await;
         }
     }
 }

@@ -1,7 +1,7 @@
 @echo off
-rem End-to-end smoke test: real demo-live runtime → bridge stdout → inspector.
-rem Pipes the actual orchestrator's bus events (not the bundled fixture) into
-rem the live cockpit. Uses ENCHANTER_BRIDGE=stdout per the v0.3.2 wire-up.
+rem One-command live session: spawns the real MCP filesystem server, runs
+rem all 7 orchestrator phases through 9 plugins, streams bus events as JSONL
+rem into the Rust cockpit — all behind a single `enchanter live` invocation.
 
 cd /d "%~dp0\..\..\"
 
@@ -11,18 +11,7 @@ if not exist "inspector\target\release\enchanter.exe" (
     exit /b 1
 )
 
-echo ============================================================
-echo Enchanter v0.5.0 LIVE smoke test
-echo ============================================================
-echo Stage 1: spawning real MCP filesystem server
-echo Stage 2: orchestrator runs all 7 phases against it
-echo Stage 3: bridge forwards bus events as JSONL to inspector
-echo ============================================================
-echo Press 'q' in the inspector to quit early.
-echo.
-
-set ENCHANTER_BRIDGE=stdout
-npx tsx scripts/demo-live.ts | inspector\target\release\enchanter.exe
+inspector\target\release\enchanter.exe live
 
 echo.
 pause

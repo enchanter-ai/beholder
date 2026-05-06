@@ -1,5 +1,5 @@
-/* scripts/demo-live.ts — connects Enchanter v0.2 to a real, npm-published MCP
-   server (@modelcontextprotocol/server-filesystem) over stdio. Demonstrates:
+/* scripts/live.ts — real session against an npm-published MCP server
+   (@modelcontextprotocol/server-filesystem) over stdio. Not a simulation:
      1. initialize handshake → server info
      2. tools/list → register in namespace
      3. callTool('list_directory') → benign call, all 7 phases fire
@@ -8,7 +8,9 @@
      5. synthetic malicious tool call → hydra fires veto on the bus
      6. pech ledger summary, bus tap of all observed events
 
-   Run:  npx tsx scripts/demo-live.ts
+   Run standalone:  npx tsx scripts/live.ts
+   With ENCHANTER_BRIDGE=stdout: bus events stream as JSONL on stdout for
+   the inspector. Combined into one command via `enchanter live`.
 */
 
 import { spawn, type ChildProcessByStdio } from 'node:child_process';

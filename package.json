@@ -53,7 +53,7 @@
     "test:watch": "vitest",
     "test:integration": "vitest run tests/integration/",
     "lint:check": "tsc --noEmit",
-    "demo:live": "tsx scripts/demo-live.ts",
+    "live": "tsx scripts/live.ts",
     "prepack": "npm run build",
     "stress": "tsx scripts/stress-plugins.ts",
     "red-team": "tsx scripts/red-team.ts",

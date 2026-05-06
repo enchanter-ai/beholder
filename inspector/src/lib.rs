@@ -37,6 +37,11 @@ pub enum Source {
     /// socket. Opt-in via `--control-socket`; the read-only `--socket`
     /// remains the default for back-compatibility.
     SocketControl(String),
+    /// v0.5+ — spawn an arbitrary command and consume its stdout as JSONL.
+    /// Usage: `enchanter inspect --exec "npx tsx scripts/demo-live.ts"`.
+    /// Closes the producer↔consumer loop in one command without an external
+    /// shell pipe.
+    Exec(String),
 }
 
 /// Resolved runtime configuration handed to `app::run`.
@@ -61,6 +66,34 @@ struct Cli {
 enum Command {
     /// Open the inspector against a live or recorded event stream (default).
     Inspect(InspectArgs),
+    /// One-command live session: spawns the Node-side runtime
+    /// (`scripts/live.ts`) and pipes its bus events straight into the cockpit.
+    /// Equivalent to `enchanter inspect --exec "npx tsx scripts/live.ts"`.
+    /// Run from the `client/enchanter/` directory so the script path resolves.
+    Live(LiveArgs),
+}
+
+#[derive(Args, Debug, Default)]
+struct LiveArgs {
+    /// Override the script path (default: `scripts/live.ts`).
+    #[arg(long, value_name = "SCRIPT", default_value = "scripts/live.ts")]
+    script: String,
+}
+
+impl LiveArgs {
+    fn into_config(self) -> Config {
+        // Set ENCHANTER_BRIDGE inline so the spawned child uses stdout sink
+        // for its bus events. Syntax differs per shell — `cmd /c` and `sh -c`
+        // both accept their respective inline-env idioms.
+        let cmd = if cfg!(windows) {
+            format!("set ENCHANTER_BRIDGE=stdout&& npx tsx {}", self.script)
+        } else {
+            format!("ENCHANTER_BRIDGE=stdout npx tsx {}", self.script)
+        };
+        Config {
+            source: Source::Exec(cmd),
+        }
+    }
 }
 
 #[derive(Args, Debug, Default)]
@@ -78,15 +111,22 @@ struct InspectArgs {
     /// AND sends approve/veto decisions on the same socket. Opt-in.
     #[arg(long, value_name = "ADDR")]
     control_socket: Option<String>,
+
+    /// Spawn the given shell command and consume its stdout as JSONL events.
+    /// Closes the producer↔consumer loop in one command — no external pipe.
+    /// Example: `enchanter inspect --exec "npx tsx scripts/demo-live.ts"`.
+    #[arg(long, value_name = "CMD", conflicts_with_all = ["from", "socket", "control_socket"])]
+    exec: Option<String>,
 }
 
 impl InspectArgs {
     fn into_config(self) -> Config {
-        let source = match (self.from, self.socket, self.control_socket) {
-            (Some(path), _, _) => Source::File(path),
-            (None, _, Some(addr)) => Source::SocketControl(addr),
-            (None, Some(addr), None) => Source::Socket(addr),
-            (None, None, None) => Source::Stdin,
+        let source = match (self.from, self.socket, self.control_socket, self.exec) {
+            (_, _, _, Some(cmd)) => Source::Exec(cmd),
+            (Some(path), _, _, None) => Source::File(path),
+            (None, _, Some(addr), None) => Source::SocketControl(addr),
+            (None, Some(addr), None, None) => Source::Socket(addr),
+            (None, None, None, None) => Source::Stdin,
         };
         Config { source }
     }
@@ -99,6 +139,7 @@ pub fn run() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let config = match cli.command.unwrap_or(Command::Inspect(InspectArgs::default())) {
         Command::Inspect(args) => args.into_config(),
+        Command::Live(args) => args.into_config(),
     };
 
     let runtime = tokio::runtime::Builder::new_multi_thread()

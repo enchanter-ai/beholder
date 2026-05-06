@@ -100,7 +100,7 @@ The companion prompt-engineering meta-engine [Wixie](https://github.com/enchante
 git clone https://github.com/enchanter-ai/enchanter.git
 cd enchanter
 npm install
-npx tsx scripts/demo-live.ts
+npx tsx scripts/live.ts
 ```
 
 Spawns the official `@modelcontextprotocol/server-filesystem`, runs through all 7 phases, and shows hydra masking real AWS-key-shaped strings + bearer tokens in file content, and vetoing synthetic `rm -rf /` and `cat ~/.ssh/id_rsa` calls on the bus.

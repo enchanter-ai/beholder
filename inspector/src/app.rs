@@ -154,6 +154,7 @@ fn map_source(s: Source) -> TSource {
         Source::File(path) => TSource::File(path),
         Source::Socket(addr) => TSource::Socket(addr),
         Source::SocketControl(addr) => TSource::SocketControl(addr),
+        Source::Exec(cmd) => TSource::Exec(cmd),
     }
 }
 
