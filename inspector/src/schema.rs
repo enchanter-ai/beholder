@@ -299,23 +299,50 @@ mod tests {
     }
 
     #[test]
-    fn rejects_missing_required() {
+    fn well_typed_variant_with_missing_required_falls_back_to_generic() {
+        // Post-v0.6 schema relaxation: a payload that LOOKS like tool.call by
+        // discriminator but is missing required `tool` no longer fails outright
+        // — it falls into the permissive `genericVariant` branch (any string
+        // type + time + extras). The producer's job is to emit the right
+        // shape; the validator only enforces the absolute minimum (type, time).
         let v = json!({"type": "tool.call", "time": 1.0, "payload": {}});
-        assert!(validate(&v).is_err());
+        validate(&v).expect("permissive schema accepts the generic-shape fallback");
     }
 
     #[test]
-    fn rejects_bad_enum() {
+    fn rejects_bad_enum_in_well_typed_branch() {
+        // Strict hydra.veto branch requires severity from the standard ladder.
+        // The validator picks the matching `type` const branch and holds it
+        // strict — generic-fallback is for UNKNOWN type strings, not for
+        // permitting bad-shape known types. Producer's job to emit valid.
         let v = json!({
             "type": "hydra.veto", "time": 1.0, "policy": "p", "reason": "r",
             "action": "a", "severity": "fatal", "payload": null
         });
-        assert!(validate(&v).is_err());
+        assert!(validate(&v).is_err(), "bad severity in strict branch should reject");
     }
 
     #[test]
-    fn rejects_unknown_discriminator() {
+    fn accepts_unknown_discriminator() {
+        // Post-v0.6: any string `type` validates as long as `time` is present
+        // — wire-format extensions (lifecycle.*, mcp.tool.*, etc.) round-trip
+        // without a schema bump. Real validation lives in apply()/UI.
         let v = json!({"type": "totally.unknown", "time": 1.0});
-        assert!(validate(&v).is_err());
+        validate(&v).expect("permissive schema accepts arbitrary type strings");
+    }
+
+    #[test]
+    fn still_rejects_missing_time() {
+        // The minimum-viable wire shape: object with `type` AND `time`. Drop
+        // `time` and validation must reject — without it the inspector can't
+        // sequence the event.
+        let v = json!({"type": "anything", "tool": "x"});
+        assert!(validate(&v).is_err(), "no time field should reject");
+    }
+
+    #[test]
+    fn still_rejects_missing_type() {
+        let v = json!({"time": 1.0, "tool": "x"});
+        assert!(validate(&v).is_err(), "no type field should reject");
     }
 }

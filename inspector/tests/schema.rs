@@ -112,22 +112,32 @@ fn happy_generic_variant() {
 }
 
 #[test]
-fn rejects_missing_required() {
+fn well_typed_missing_required_falls_back_to_generic() {
+    // Post-v0.6 schema relaxation: when a strict variant fails, the validator
+    // falls into the permissive genericVariant. tool.call without `tool` no
+    // longer rejects at the schema boundary — it's accepted as a generic
+    // shape. Producer-side correctness is enforced at apply() time.
     let v = json!({"type": "tool.call", "time": 1.0, "payload": {}});
-    assert!(validate(&v).is_err(), "missing tool field");
+    validate(&v).expect("falls back to generic");
 }
 
 #[test]
-fn rejects_wrong_type() {
+fn well_typed_wrong_type_still_validates_via_fallback() {
+    // code.modified with a string in `lines_added` (expected: number) fails
+    // the strict branch, then validates as the generic shape since type +
+    // time are both present.
     let v = json!({
         "type": "code.modified", "time": 1.0,
         "file": "x.ts", "lines_added": "five", "lines_removed": 0, "lines_modified": 5
     });
-    assert!(validate(&v).is_err(), "string in numeric field");
+    validate(&v).expect("falls back to generic");
 }
 
 #[test]
 fn rejects_bad_enum_severity() {
+    // hydra.veto strict branch requires severity from the canonical ladder.
+    // "fatal" is not in the ladder; the strict branch fails. Generic fallback
+    // doesn't apply for known type discriminators with shape mismatches.
     let v = json!({
         "type": "hydra.veto", "time": 1.0,
         "policy": "p", "reason": "r", "action": "a", "severity": "fatal",
@@ -137,9 +147,23 @@ fn rejects_bad_enum_severity() {
 }
 
 #[test]
-fn rejects_unknown_discriminator() {
+fn accepts_unknown_discriminator() {
+    // Post-v0.6: any string `type` validates (permissive schema). Unknown
+    // wire-format names round-trip without a schema bump.
     let v = json!({"type": "totally.unknown", "time": 1.0});
-    assert!(validate(&v).is_err());
+    validate(&v).expect("permissive: unknown discriminator validates");
+}
+
+#[test]
+fn rejects_missing_time() {
+    let v = json!({"type": "anything"});
+    assert!(validate(&v).is_err(), "no time field should reject");
+}
+
+#[test]
+fn rejects_missing_type() {
+    let v = json!({"time": 1.0});
+    assert!(validate(&v).is_err(), "no type field should reject");
 }
 
 #[test]
