@@ -412,14 +412,70 @@ function lineCount(s) {
 }
 
 // ----------------------------------------------------------------------------
+// Per-model pricing per 1M tokens (USD). Pro/Max-plan transcripts don't
+// carry `costUSD`, so we compute cost ourselves from the four usage buckets
+// (fresh input, cache-create input, cache-read input, output) and the model
+// ID reported on each assistant row.
+// ----------------------------------------------------------------------------
+const PRICING = {
+  // Opus 4.x family
+  'claude-opus-4-7':  { input: 15, output: 75, cache_read: 1.5,  cache_create: 18.75 },
+  'claude-opus-4-6':  { input: 15, output: 75, cache_read: 1.5,  cache_create: 18.75 },
+  'claude-opus-4-5':  { input: 15, output: 75, cache_read: 1.5,  cache_create: 18.75 },
+  'claude-opus-4':    { input: 15, output: 75, cache_read: 1.5,  cache_create: 18.75 },
+  // Sonnet 4.x family
+  'claude-sonnet-4-6': { input: 3,  output: 15, cache_read: 0.3,  cache_create: 3.75 },
+  'claude-sonnet-4-5': { input: 3,  output: 15, cache_read: 0.3,  cache_create: 3.75 },
+  'claude-sonnet-4':   { input: 3,  output: 15, cache_read: 0.3,  cache_create: 3.75 },
+  // Haiku 4.x family
+  'claude-haiku-4-5':  { input: 1,  output: 5,  cache_read: 0.1,  cache_create: 1.25 },
+  'claude-haiku-4':    { input: 1,  output: 5,  cache_read: 0.1,  cache_create: 1.25 },
+};
+const DEFAULT_PRICE = PRICING['claude-sonnet-4-6'];
+
+function pricingFor(model) {
+  if (typeof model !== 'string' || model.length === 0) return DEFAULT_PRICE;
+  // Strip a trailing `-YYYYMMDD` date suffix and any `[1m]`-style annotation.
+  const stripped = model.replace(/-\d{8}.*$/, '').replace(/\[.*\]$/, '');
+  if (PRICING[stripped]) return PRICING[stripped];
+  // Family-hint fallback for unknown model IDs.
+  if (/opus/i.test(model))  return PRICING['claude-opus-4-7'];
+  if (/haiku/i.test(model)) return PRICING['claude-haiku-4-5'];
+  return DEFAULT_PRICE;
+}
+
+function priceUsage(model, usage) {
+  const p = pricingFor(model);
+  const inp = Number(usage.input_tokens  ?? usage.prompt_tokens     ?? 0);
+  const out = Number(usage.output_tokens ?? usage.completion_tokens ?? 0);
+  const cr  = Number(usage.cache_read_input_tokens     ?? 0);
+  const cc  = Number(usage.cache_creation_input_tokens ?? 0);
+  const dollars =
+    (Math.max(0, inp) * p.input +
+     Math.max(0, out) * p.output +
+     Math.max(0, cr)  * p.cache_read +
+     Math.max(0, cc)  * p.cache_create) / 1_000_000;
+  return Number.isFinite(dollars) ? dollars : 0;
+}
+
+// ----------------------------------------------------------------------------
 // Transcript scan — Claude Code writes the full session JSONL to
-// payload.transcript_path on Stop / SessionEnd. Each line carries a `message`
-// with usage `{input_tokens, output_tokens, cache_*}` and (newer Claude
-// versions) `costUSD`. We scan from the last seen byte offset and append
-// only the delta to keep cost monotonically increasing.
+// payload.transcript_path on Stop / SessionEnd. Each assistant row carries
+// `message.usage.{input_tokens, output_tokens, cache_creation_input_tokens,
+// cache_read_input_tokens}` and `message.model`. Pro/Max-plan transcripts do
+// NOT carry `costUSD`, so we compute it from per-row tokens × model rates.
+// We scan from the last seen byte offset and append only the delta to keep
+// cost monotonically increasing.
 // ----------------------------------------------------------------------------
 function scanTranscript(transcriptPath, fromOffset) {
-  const result = { input: 0, output: 0, cost: 0, newOffset: fromOffset };
+  const result = {
+    input: 0,
+    output: 0,
+    cache_read: 0,
+    cache_create: 0,
+    cost: 0,
+    newOffset: fromOffset,
+  };
   if (typeof transcriptPath !== 'string' || transcriptPath.length === 0) {
     return result;
   }
@@ -461,25 +517,30 @@ function scanTranscript(transcriptPath, fromOffset) {
     } catch {
       continue;
     }
-    // Claude Code transcript shapes vary; usage lives under message.usage
-    // for assistant turns. costUSD appears at the top level on newer builds.
     const usage =
       (row && row.message && row.message.usage) ||
       (row && row.usage) ||
       null;
-    if (usage && typeof usage === 'object') {
-      const i = Number(usage.input_tokens ?? usage.prompt_tokens ?? 0);
-      const o = Number(usage.output_tokens ?? usage.completion_tokens ?? 0);
-      if (Number.isFinite(i) && i > 0) result.input += i;
-      if (Number.isFinite(o) && o > 0) result.output += o;
-      // Cache-creation/read tokens count toward input for budget purposes.
-      const cc = Number(usage.cache_creation_input_tokens ?? 0);
-      const cr = Number(usage.cache_read_input_tokens ?? 0);
-      if (Number.isFinite(cc) && cc > 0) result.input += cc;
-      if (Number.isFinite(cr) && cr > 0) result.input += cr;
+    if (!usage || typeof usage !== 'object') continue;
+
+    const i  = Math.max(0, Number(usage.input_tokens               ?? usage.prompt_tokens     ?? 0));
+    const o  = Math.max(0, Number(usage.output_tokens              ?? usage.completion_tokens ?? 0));
+    const cc = Math.max(0, Number(usage.cache_creation_input_tokens ?? 0));
+    const cr = Math.max(0, Number(usage.cache_read_input_tokens     ?? 0));
+    if (Number.isFinite(i))  result.input        += i;
+    if (Number.isFinite(o))  result.output       += o;
+    if (Number.isFinite(cc)) result.cache_create += cc;
+    if (Number.isFinite(cr)) result.cache_read   += cr;
+
+    // Cost: prefer transcript-supplied costUSD when present (newer builds /
+    // API plans), else compute from per-row model rates.
+    const supplied = Number(row && (row.costUSD ?? row.cost_usd ?? 0));
+    if (Number.isFinite(supplied) && supplied > 0) {
+      result.cost += supplied;
+    } else {
+      const model = (row && row.message && row.message.model) || (row && row.model) || '';
+      result.cost += priceUsage(model, usage);
     }
-    const cost = Number(row && (row.costUSD ?? row.cost_usd ?? 0));
-    if (Number.isFinite(cost) && cost > 0) result.cost += cost;
   }
   return result;
 }
@@ -881,8 +942,12 @@ function emitForHook(eventName, payload) {
           state.transcript_offset = 0;
         }
         const delta = scanTranscript(transcriptPath, state.transcript_offset);
-        if (delta.input > 0 || delta.output > 0 || delta.cost > 0) {
-          state.session_input_tokens += delta.input;
+        // Bundle cache tokens into the "input" total the inspector sees so
+        // the budget panel reflects the full context cost. Cost itself is
+        // already priced separately per bucket inside scanTranscript.
+        const deltaInputTotal = delta.input + delta.cache_create + delta.cache_read;
+        if (deltaInputTotal > 0 || delta.output > 0 || delta.cost > 0) {
+          state.session_input_tokens += deltaInputTotal;
           state.session_output_tokens += delta.output;
           state.session_cost_usd += delta.cost;
           appendEvent(
@@ -890,11 +955,16 @@ function emitForHook(eventName, payload) {
               type: 'pech.ledger.appended',
               plugin: 'pech',
               phase: 'post-session',
-              input_tokens: delta.input,
+              input_tokens: deltaInputTotal,
               output_tokens: delta.output,
               cost_usd: delta.cost,
               session_cost_usd: state.session_cost_usd,
               daily_cost_usd: state.session_cost_usd,
+              // Bonus telemetry — exposes the cache split so the cockpit can
+              // (now or later) distinguish fresh vs. cache-read tokens.
+              cache_create_tokens: delta.cache_create,
+              cache_read_tokens: delta.cache_read,
+              fresh_input_tokens: delta.input,
             }),
           );
         }
