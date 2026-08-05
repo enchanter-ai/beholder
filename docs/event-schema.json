@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://enchanter.ai/schemas/event-schema.json",
+  "$id": "https://enchanter.dev/schemas/event-schema.json",
   "title": "Enchanter event-bus wire format",
   "description": "Single source of truth for the JSONL events flowing between the TypeScript runtime (producer, src/observability/bridge.ts) and the Rust inspector (consumer, inspector/src/transport.rs). Mirrors the Rust enum in inspector/src/event.rs. Both sides validate every line against this schema and drop on mismatch with a logged warning. See docs/event-schema.md for prose context.",
   "definitions": {
