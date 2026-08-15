@@ -13,18 +13,31 @@ Enchanter is a TypeScript MCP client SDK with a hybrid orchestrator and 10 capab
 
 ## Install
 
+> **Not published to npm.** This package is `private`, and the bare name
+> `enchanter` on the public npm registry belongs to an unrelated project — do
+> **not** run `npm install enchanter`. Build from source in this repo instead:
+
 ```bash
-npm install enchanter
+git clone https://github.com/enchanter-ai/beholder.git
+cd beholder
+npm install        # deps for this checkout
+npm run build      # tsc + copy assets -> dist/
 ```
 
 Requires Node 22+.
 
+> Note: `npm install` runs a `postinstall` hook installer
+> (`scripts/hooks/install-hooks.mjs`) that writes entries into
+> `~/.claude/settings.json`. Run `npm run uninstall-hooks` to remove them.
+
 ## Try it
 
 ```bash
-npm install -g enchanter           # or: cd client/enchanter && npm install
+# From this repo (not an npm package — see Install above).
+npm install && npm run build
+node ./bin/enchanter.mjs           # CLI entry (bin name: "enchanter")
+# Optional Rust cockpit:
 cd inspector && cargo build --release
-enchanter                          # opens the cockpit; runs the live demo
 ```
 
 ## Quickstart
