@@ -191,14 +191,14 @@ describe('validate (inbound events)', () => {
   });
 
   it('passes an unknown discriminator on a generic-shaped event (no enum match → falls through generic)', () => {
-    // The schema's generic variant pins `type` to a known-set enum, so an
-    // unknown discriminator does NOT match the generic branch — instead the
-    // strict variants reject it too. This is the correct behavior: schema
-    // mismatch is mismatch. We assert ok:false here so the test reflects
-    // reality (the spec said "should pass" but our schema fails closed —
-    // matching the Rust enum exactly, which also rejects unknowns).
+    // Post-v0.6 permissive contract: the generic variant accepts any string
+    // `type` plus a `time`, so an unknown discriminator (a wire-format
+    // extension) falls through the strict oneOf into the generic branch and
+    // validates. This matches the Rust runtime, which surfaces unknown types as
+    // Event::Unknown(GenericPayload) rather than erroring. Real per-type
+    // validation lives downstream (apply()/UI), not in the wire-shape gate.
     const result = validate({ type: 'totally.unknown', time: 1.0 });
-    expect(result.ok).toBe(false);
+    expect(result.ok).toBe(true);
   });
 
   it('rejects non-object input', () => {
