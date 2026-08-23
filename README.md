@@ -9,7 +9,7 @@
   </a>
 </p>
 
-Enchanter is a TypeScript MCP client SDK with a hybrid orchestrator and 10 capability plugins, plus a Rust terminal cockpit ([`inspector/`](inspector/)) for live observability. Every outbound tool call rides a 7-phase request lifecycle, runs through an in-process event bus, and lets specialized plugins (trust scoring, drift detection, security veto, code review, structural fingerprinting, cost attribution, git workflow) observe, modify, or block before the request leaves your process.
+Enchanter is a TypeScript MCP client SDK with a hybrid orchestrator and 10 capability plugins, plus a Rust terminal cockpit ([`inspector/`](inspector/)) for live observability. Every outbound tool call rides a 7-phase request lifecycle, runs through an in-process event bus, and lets specialized plugins (trust scoring, drift detection, security veto, code review, structural fingerprinting, cost attribution, git workflow) observe, modify, or block before the request leaves your process — **when you drive traffic through the SDK's `McpClient` orchestrator** (see Quickstart below). The auto-wired Claude Code integration (`postinstall` hook, below) is observability-only: it emits telemetry for the inspector and never blocks a tool call.
 
 ## Install
 
@@ -29,6 +29,11 @@ Requires Node 22+.
 > Note: `npm install` runs a `postinstall` hook installer
 > (`scripts/hooks/install-hooks.mjs`) that writes entries into
 > `~/.claude/settings.json`. Run `npm run uninstall-hooks` to remove them.
+> These hooks are **advisory only** — the emitter
+> (`scripts/hooks/claude-code-emit.mjs`) always exits 0, so it feeds the
+> inspector but cannot veto or block a Claude Code tool call. The blocking
+> security veto only fires when you use the SDK's `McpClient` orchestrator
+> directly (see Quickstart).
 
 ## Try it
 
@@ -146,7 +151,7 @@ node scripts/hooks/install-hooks.mjs
 enchanter inspect --tail ~/.cache/enchanter/claude-code.jsonl
 ```
 
-Idempotent. Edits `~/.claude/settings.json` only. See [`docs/claude-code-integration.md`](docs/claude-code-integration.md) for the full hook → wire-event mapping, uninstall, and privacy notes.
+Idempotent. Edits `~/.claude/settings.json` only. Advisory-only — these hooks stream telemetry to the inspector and never block a tool call (the hook emitter always exits 0). See [`docs/claude-code-integration.md`](docs/claude-code-integration.md) for the full hook → wire-event mapping, uninstall, and privacy notes.
 
 ## Status
 
