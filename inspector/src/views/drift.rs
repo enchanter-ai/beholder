@@ -3,11 +3,11 @@
 //! Shows anchor (stated) intent, current (inferred) intent, drift score,
 //! drift-over-time sparkline, off-task warnings, and the intent timeline.
 
-use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Cell, Paragraph, Row, Table};
+use ratatui::Frame;
 
 use crate::event::{Event, Severity};
 use crate::state::AppState;
@@ -31,7 +31,9 @@ fn extract_str<'a>(
 }
 
 /// Best-effort extraction of a numeric drift value (0.0 ..= 1.0 or 0..=100).
-fn extract_drift_value(extra: &std::collections::BTreeMap<String, serde_json::Value>) -> Option<f64> {
+fn extract_drift_value(
+    extra: &std::collections::BTreeMap<String, serde_json::Value>,
+) -> Option<f64> {
     for k in ["drift", "drift_score", "drift_pct", "score"] {
         if let Some(v) = extra.get(k).and_then(|v| v.as_f64()) {
             return Some(v);
@@ -94,7 +96,7 @@ fn render_top_cards(frame: &mut Frame, area: Rect, app: &AppState) {
         .rev()
         .find_map(|e| match e {
             Event::DjinnAnchor(p) => extract_str(&p.extra, "intent")
-                .or_else(|| p.message.as_deref())
+                .or(p.message.as_deref())
                 .map(|s| s.to_string()),
             _ => None,
         })
@@ -107,7 +109,7 @@ fn render_top_cards(frame: &mut Frame, area: Rect, app: &AppState) {
         .find_map(|e| match e {
             Event::DjinnDrift(p) => extract_str(&p.extra, "current_intent")
                 .or_else(|| extract_str(&p.extra, "intent"))
-                .or_else(|| p.message.as_deref())
+                .or(p.message.as_deref())
                 .map(|s| s.to_string()),
             _ => None,
         })
@@ -181,10 +183,7 @@ fn render_drift_chart(frame: &mut Frame, area: Rect, app: &AppState) {
         .map(|v| (v.max(0.0) * 1000.0) as u64)
         .collect();
 
-    let min_v = drift_series
-        .iter()
-        .copied()
-        .fold(f64::INFINITY, f64::min);
+    let min_v = drift_series.iter().copied().fold(f64::INFINITY, f64::min);
     let max_v = drift_series
         .iter()
         .copied()
@@ -193,20 +192,14 @@ fn render_drift_chart(frame: &mut Frame, area: Rect, app: &AppState) {
     let width = inner.width.saturating_sub(20).max(20) as usize;
     let spark = widgets::sparkline_string(&scaled, width);
 
-    let label = format!(
-        "min {min_v:.2}  max {max_v:.2}  n={}",
-        drift_series.len()
-    );
+    let label = format!("min {min_v:.2}  max {max_v:.2}  n={}", drift_series.len());
 
     let lines = vec![
         Line::from(Span::styled(
             spark,
             Style::default().fg(theme::PLUGIN_DJINN),
         )),
-        Line::from(Span::styled(
-            label,
-            Style::default().fg(theme::TEXT_DIM),
-        )),
+        Line::from(Span::styled(label, Style::default().fg(theme::TEXT_DIM))),
     ];
 
     let p = Paragraph::new(lines).alignment(Alignment::Left);
@@ -271,7 +264,7 @@ fn render_off_task_warnings(frame: &mut Frame, area: Rect, app: &AppState) {
                     .map(|v| format!("{v:.2}"))
                     .unwrap_or_else(|| "—".to_string());
                 let advice = extract_str(&p.extra, "advice")
-                    .or_else(|| p.message.as_deref())
+                    .or(p.message.as_deref())
                     .unwrap_or("—");
                 let sev_color = p
                     .severity
@@ -339,7 +332,7 @@ fn render_intent_timeline(frame: &mut Frame, area: Rect, app: &AppState) {
                     .map(|dt| dt.format("%H:%M:%S").to_string())
                     .unwrap_or_else(|| "—".to_string());
                 let intent = extract_str(&p.extra, "intent")
-                    .or_else(|| p.message.as_deref())
+                    .or(p.message.as_deref())
                     .unwrap_or("—");
                 Some(Line::from(vec![
                     Span::styled(

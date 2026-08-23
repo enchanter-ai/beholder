@@ -4,11 +4,11 @@
 //! a recent-activity sparkline, plus a sub-panel showing the selected plugin's
 //! role description and recent events.
 
-use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Cell, Paragraph, Row, Table, Wrap};
+use ratatui::Frame;
 
 use crate::event::Event;
 use crate::state::{AppState, Panel, PluginState, PluginStatus, SortMode};
@@ -156,46 +156,55 @@ fn render_table(frame: &mut Frame, area: Rect, app: &AppState) {
     let header = Row::new(header_cells).height(1);
 
     // Selected row in the *original* indexing; map through `order`.
-    let selected_row_pos = order
-        .iter()
-        .position(|i| *i == app.selected_plugin_index);
+    let selected_row_pos = order.iter().position(|i| *i == app.selected_plugin_index);
 
     // Sparkline column gets the leftover width.
-    let spark_width = area.width.saturating_sub(2 + 8 + 9 + 7 + 7 + 7 + 7 + 7 + 9 + 14 + 11) as usize;
+    let spark_width = area
+        .width
+        .saturating_sub(2 + 8 + 9 + 7 + 7 + 7 + 7 + 7 + 9 + 14 + 11) as usize;
     let spark_width = spark_width.max(8);
 
-    let rows: Vec<Row> = order.iter().enumerate().map(|(_pos, i)| {
-        let p = &app.plugins[*i];
-        let dot = if p.enabled { "●" } else { "○" };
-        let dot_style = Style::default().fg(if p.enabled { p.color } else { theme::TEXT_FAINT });
+    let rows: Vec<Row> = order
+        .iter()
+        .map(|i| {
+            let p = &app.plugins[*i];
+            let dot = if p.enabled { "●" } else { "○" };
+            let dot_style = Style::default().fg(if p.enabled {
+                p.color
+            } else {
+                theme::TEXT_FAINT
+            });
 
-        let name_style = Style::default().fg(theme::plugin_color(&p.name)).add_modifier(Modifier::BOLD);
-        let status_style = Style::default().fg(status_color(p.status));
+            let name_style = Style::default()
+                .fg(theme::plugin_color(&p.name))
+                .add_modifier(Modifier::BOLD);
+            let status_style = Style::default().fg(status_color(p.status));
 
-        let health_pct = format!("{:>3.0}%", (p.health * 100.0).clamp(0.0, 100.0));
-        let calls = format!("{}", p.calls);
-        let errors = format!("{}", p.errors);
-        let p95 = format!("{:.1}", p.latency_p95_ms);
-        let p99 = format!("{:.1}", p.latency_p99_ms);
-        let last = fmt_time(p.last_event);
-        let value = truncate(&p.display_value, 12);
-        let spark = plugin_sparkline(p, spark_width);
+            let health_pct = format!("{:>3.0}%", (p.health * 100.0).clamp(0.0, 100.0));
+            let calls = format!("{}", p.calls);
+            let errors = format!("{}", p.errors);
+            let p95 = format!("{:.1}", p.latency_p95_ms);
+            let p99 = format!("{:.1}", p.latency_p99_ms);
+            let last = fmt_time(p.last_event);
+            let value = truncate(&p.display_value, 12);
+            let spark = plugin_sparkline(p, spark_width);
 
-        Row::new(vec![
-            Cell::from(dot).style(dot_style),
-            Cell::from(p.name.clone()).style(name_style),
-            Cell::from(status_label(p.status)).style(status_style),
-            Cell::from(health_pct),
-            Cell::from(calls),
-            Cell::from(errors),
-            Cell::from(p95),
-            Cell::from(p99),
-            Cell::from(last),
-            Cell::from(value),
-            Cell::from(spark).style(Style::default().fg(p.color)),
-        ])
-        .height(1)
-    }).collect();
+            Row::new(vec![
+                Cell::from(dot).style(dot_style),
+                Cell::from(p.name.clone()).style(name_style),
+                Cell::from(status_label(p.status)).style(status_style),
+                Cell::from(health_pct),
+                Cell::from(calls),
+                Cell::from(errors),
+                Cell::from(p95),
+                Cell::from(p99),
+                Cell::from(last),
+                Cell::from(value),
+                Cell::from(spark).style(Style::default().fg(p.color)),
+            ])
+            .height(1)
+        })
+        .collect();
 
     let widths = [
         Constraint::Length(2),
@@ -273,7 +282,11 @@ fn render_detail(frame: &mut Frame, area: Rect, app: &AppState) {
     let mut recent: Vec<&Event> = app
         .events
         .iter()
-        .filter(|ev| ev.plugin().map(|p| p.eq_ignore_ascii_case(&plugin.name)).unwrap_or(false))
+        .filter(|ev| {
+            ev.plugin()
+                .map(|p| p.eq_ignore_ascii_case(&plugin.name))
+                .unwrap_or(false)
+        })
         .collect();
     recent.reverse();
     recent.truncate(5);
@@ -287,9 +300,7 @@ fn render_detail(frame: &mut Frame, area: Rect, app: &AppState) {
         for ev in recent {
             let t = fmt_time(Some(ev.time()));
             let tag = ev.type_tag();
-            let msg = match ev {
-                _ => format!("{:?}", ev),
-            };
+            let msg = format!("{:?}", ev);
             let msg = truncate(&msg, (inner.width.saturating_sub(20)) as usize);
             lines.push(Line::from(vec![
                 Span::styled(format!("  {} ", t), theme::dim_style()),

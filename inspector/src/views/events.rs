@@ -3,11 +3,11 @@
 //! Shows a filterable, sortable list of every event in the ring buffer plus
 //! a detail pane for the currently-selected event's full payload.
 
-use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Cell, Paragraph, Row, Table, Wrap};
+use ratatui::Frame;
 
 use crate::event::{Event, Severity};
 use crate::state::{AppState, Panel, SortMode};
@@ -55,10 +55,20 @@ fn event_message(ev: &Event) -> String {
     match ev {
         Event::HydraVeto { reason, action, .. } => format!("{} ({})", reason, action),
         Event::ToolCall { tool, .. } => format!("tool={}", tool),
-        Event::CodeModified { file, lines_added, lines_removed, .. } => {
+        Event::CodeModified {
+            file,
+            lines_added,
+            lines_removed,
+            ..
+        } => {
             format!("{} +{} -{}", file, lines_added, lines_removed)
         }
-        Event::TaskUpdated { task_id, status, intent, .. } => {
+        Event::TaskUpdated {
+            task_id,
+            status,
+            intent,
+            ..
+        } => {
             let status = status.as_deref().unwrap_or("?");
             let intent = intent.as_deref().unwrap_or("");
             format!("{} [{}] {}", task_id, status, intent)
@@ -67,7 +77,11 @@ fn event_message(ev: &Event) -> String {
             "in={} out={} ${:.4}",
             payload.input_tokens, payload.output_tokens, payload.cost_usd
         ),
-        Event::RuntimeMetrics { open_sessions, ongoing_tasks, .. } => {
+        Event::RuntimeMetrics {
+            open_sessions,
+            ongoing_tasks,
+            ..
+        } => {
             format!("sessions={} tasks={}", open_sessions, ongoing_tasks)
         }
         // Fallback: generic-payload variants expose `message` indirectly via the
@@ -75,7 +89,9 @@ fn event_message(ev: &Event) -> String {
         _ => {
             let dbg = format!("{:?}", ev);
             // Strip the Variant(...) prefix to keep it short.
-            dbg.split_once('(').map(|(_, r)| r.trim_end_matches(')').to_string()).unwrap_or(dbg)
+            dbg.split_once('(')
+                .map(|(_, r)| r.trim_end_matches(')').to_string())
+                .unwrap_or(dbg)
         }
     }
 }
@@ -152,7 +168,9 @@ fn render_filter_bar(frame: &mut Frame, area: Rect, app: &AppState) {
             Span::styled("filter: ", theme::dim_style()),
             Span::styled(
                 app.filter_query.clone(),
-                Style::default().fg(theme::ACCENT).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(theme::ACCENT)
+                    .add_modifier(Modifier::BOLD),
             ),
         ])
     };
@@ -161,7 +179,7 @@ fn render_filter_bar(frame: &mut Frame, area: Rect, app: &AppState) {
 }
 
 /// Build the filtered+sorted list of (original-index, &Event) pairs.
-fn filtered_indices<'a>(app: &'a AppState) -> Vec<usize> {
+fn filtered_indices(app: &AppState) -> Vec<usize> {
     let mut idx: Vec<usize> = app
         .events
         .iter()
@@ -175,8 +193,14 @@ fn filtered_indices<'a>(app: &'a AppState) -> Vec<usize> {
             idx.sort_by(|a, b| {
                 let ea = &app.events[*a];
                 let eb = &app.events[*b];
-                ea.plugin().unwrap_or("").cmp(eb.plugin().unwrap_or(""))
-                    .then_with(|| eb.time().partial_cmp(&ea.time()).unwrap_or(std::cmp::Ordering::Equal))
+                ea.plugin()
+                    .unwrap_or("")
+                    .cmp(eb.plugin().unwrap_or(""))
+                    .then_with(|| {
+                        eb.time()
+                            .partial_cmp(&ea.time())
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    })
             });
         }
         SortMode::BySeverity => {
@@ -217,8 +241,7 @@ fn render_list(frame: &mut Frame, area: Rect, app: &AppState) {
 
     let order = filtered_indices(app);
     if order.is_empty() {
-        let p = Paragraph::new("(no events match the current filter)")
-            .style(theme::dim_style());
+        let p = Paragraph::new("(no events match the current filter)").style(theme::dim_style());
         frame.render_widget(p, area);
         return;
     }
@@ -245,8 +268,8 @@ fn render_list(frame: &mut Frame, area: Rect, app: &AppState) {
             };
             let source = event_source(ev);
             let source_color = theme::plugin_color(&source);
-            let source_cell = Cell::from(truncate(&source, 10))
-                .style(Style::default().fg(source_color));
+            let source_cell =
+                Cell::from(truncate(&source, 10)).style(Style::default().fg(source_color));
             let tag = truncate(ev.type_tag(), 22);
             let msg = truncate(&event_message(ev), msg_width);
 
@@ -295,7 +318,7 @@ fn render_detail(frame: &mut Frame, area: Rect, app: &AppState) {
     }
 
     let order = filtered_indices(app);
-    let target_idx = if order.iter().any(|i| *i == app.selected_event_index) {
+    let target_idx = if order.contains(&app.selected_event_index) {
         app.selected_event_index
     } else if let Some(first) = order.first() {
         *first

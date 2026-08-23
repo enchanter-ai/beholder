@@ -5,16 +5,18 @@
 //! state mutation, and view rendering. Terminal init and teardown are bracketed
 //! by a Drop-guard so panics never leave the user in raw mode.
 
-use std::io::{self, IsTerminal, Stdout};
+use std::io::{self, Stdout};
 use std::time::Duration;
 
 use crossterm::{
     event::{
-        DisableMouseCapture, EnableMouseCapture, Event as CtEvent, KeyCode, KeyEvent,
-        KeyEventKind, KeyModifiers,
+        DisableMouseCapture, EnableMouseCapture, Event as CtEvent, KeyCode, KeyEvent, KeyEventKind,
+        KeyModifiers,
     },
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen, SetTitle},
+    terminal::{
+        disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen, SetTitle,
+    },
 };
 use ratatui::{backend::CrosstermBackend, Frame, Terminal};
 use tokio::sync::mpsc;
@@ -47,20 +49,18 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
     // until the user pipes something in or quits — honest, non-deceiving.
     let demo_mode = false;
 
-    let (mut event_rx, control_writer): (mpsc::Receiver<Event>, ControlWriter) = match config
-        .source
-        .clone()
-    {
-        Source::SocketControl(_) => {
-            let transport = Transport::try_spawn(map_source(config.source), 1024).await?;
-            let writer = transport.writer();
-            (transport.into_receiver(), writer)
-        }
-        _ => (
-            Transport::spawn(map_source(config.source), 1024).into_receiver(),
-            ControlWriter::disconnected(),
-        ),
-    };
+    let (mut event_rx, control_writer): (mpsc::Receiver<Event>, ControlWriter) =
+        match config.source.clone() {
+            Source::SocketControl(_) => {
+                let transport = Transport::try_spawn(map_source(config.source), 1024).await?;
+                let writer = transport.writer();
+                (transport.into_receiver(), writer)
+            }
+            _ => (
+                Transport::spawn(map_source(config.source), 1024).into_receiver(),
+                ControlWriter::disconnected(),
+            ),
+        };
 
     // Keyboard: poll-on-blocking-thread, forward Crossterm events over a channel.
     let (key_tx, mut key_rx) = mpsc::channel::<CtEvent>(64);
@@ -73,8 +73,10 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
     let mut tick = tokio::time::interval(Duration::from_millis(250));
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-    let mut app = AppState::default();
-    app.demo_mode = demo_mode;
+    let mut app = AppState {
+        demo_mode,
+        ..AppState::default()
+    };
     // Populate session identity so the ACTIVE SESSION box shows real values
     // even before any session.* event has arrived.
     app.session.workspace = crate::state::detect_claude_workspace();
@@ -105,7 +107,7 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
 
             _ = tick.tick() => {
                 app.bump_tick();
-                if app.tick % 240 == 0 {
+                if app.tick.is_multiple_of(240) {
                     let (t, m) = crate::state::detect_claude_usage_today();
                     app.session.claude_tokens_today = t;
                     app.session.claude_messages_today = m;
@@ -283,9 +285,7 @@ fn draw_help_overlay(frame: &mut Frame) {
         .title(" Help — keys ")
         .style(Style::default().bg(Color::Black).fg(Color::White));
 
-    let para = Paragraph::new(body)
-        .block(block)
-        .alignment(Alignment::Left);
+    let para = Paragraph::new(body).block(block).alignment(Alignment::Left);
 
     frame.render_widget(Clear, modal);
     frame.render_widget(para, modal);
@@ -577,7 +577,11 @@ mod tests {
         assert_eq!(app.pending_approvals.len(), 1);
         let outcome = handle_key_for_test(&mut app, KeyCode::Char('a'));
         assert_eq!(outcome, InputOutcome::Continue);
-        assert_eq!(app.pending_approvals.len(), 0, "approve should pop the queue");
+        assert_eq!(
+            app.pending_approvals.len(),
+            0,
+            "approve should pop the queue"
+        );
     }
 
     #[tokio::test]

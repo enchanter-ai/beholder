@@ -13,7 +13,10 @@ fn payload_str(
     extra: &std::collections::BTreeMap<String, serde_json::Value>,
     key: &str,
 ) -> Option<String> {
-    extra.get(key).and_then(|v| v.as_str()).map(|s| s.to_string())
+    extra
+        .get(key)
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
 }
 
 fn payload_f32(
@@ -368,10 +371,7 @@ impl Default for SessionState {
 /// `git config user.email`, then `$USER` / `$USERNAME`, then `"unknown"`.
 pub fn detect_user() -> String {
     use std::process::Command;
-    if let Ok(output) = Command::new("git")
-        .args(["config", "user.email"])
-        .output()
-    {
+    if let Ok(output) = Command::new("git").args(["config", "user.email"]).output() {
         if output.status.success() {
             let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if !s.is_empty() {
@@ -407,10 +407,7 @@ pub fn detect_github_user() -> String {
             }
         }
     }
-    if let Ok(output) = Command::new("git")
-        .args(["config", "user.name"])
-        .output()
-    {
+    if let Ok(output) = Command::new("git").args(["config", "user.name"]).output() {
         if output.status.success() {
             let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if !s.is_empty() {
@@ -503,7 +500,19 @@ pub fn detect_claude_user() -> String {
 fn find_user_string(v: &serde_json::Value) -> Option<String> {
     use serde_json::Value;
     // First pass: look for keys that strongly imply identity.
-    const KEYS: &[&str] = &["emailAddress", "email", "user_email", "account_email", "preferred_username", "login", "user", "username", "name", "account", "subject"];
+    const KEYS: &[&str] = &[
+        "emailAddress",
+        "email",
+        "user_email",
+        "account_email",
+        "preferred_username",
+        "login",
+        "user",
+        "username",
+        "name",
+        "account",
+        "subject",
+    ];
     fn walk(v: &Value, keys: &[&str]) -> Option<String> {
         match v {
             Value::Object(map) => {
@@ -571,9 +580,8 @@ fn looks_like_jwt(s: &str) -> bool {
     let parts: Vec<&str> = s.split('.').collect();
     parts.len() == 3
         && parts.iter().all(|p| !p.is_empty())
-        && s.chars().all(|c| {
-            c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' || c == '='
-        })
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' || c == '=')
 }
 
 /// Decode a JWT and pull an email-shaped identity field from its payload.
@@ -607,7 +615,7 @@ fn b64url_decode(input: &str) -> Result<Vec<u8>, ()> {
             other => other,
         })
         .collect();
-    while s.len() % 4 != 0 {
+    while !s.len().is_multiple_of(4) {
         s.push('=');
     }
 
@@ -672,7 +680,7 @@ fn scan_memory_for_email(projects_root: &std::path::Path, take: usize) -> Option
             Some((mtime, path))
         })
         .collect();
-    entries.sort_by(|a, b| b.0.cmp(&a.0));
+    entries.sort_by_key(|e| std::cmp::Reverse(e.0));
 
     for (_, dir) in entries.into_iter().take(take) {
         let memory = dir.join("memory").join("MEMORY.md");
@@ -815,12 +823,20 @@ pub fn detect_claude_workspace() -> String {
     let home = std::env::var("HOME")
         .ok()
         .or_else(|| std::env::var("USERPROFILE").ok());
-    let Some(home) = home else { return detect_workspace() };
+    let Some(home) = home else {
+        return detect_workspace();
+    };
     let projects = std::path::Path::new(&home).join(".claude").join("projects");
-    let Ok(project_iter) = std::fs::read_dir(&projects) else { return detect_workspace() };
+    let Ok(project_iter) = std::fs::read_dir(&projects) else {
+        return detect_workspace();
+    };
 
     // Collect (mtime, jsonl path) for every transcript, then pick the freshest.
-    let mut newest: Option<(std::time::SystemTime, std::path::PathBuf, std::path::PathBuf)> = None;
+    let mut newest: Option<(
+        std::time::SystemTime,
+        std::path::PathBuf,
+        std::path::PathBuf,
+    )> = None;
     'outer: for project_entry in project_iter.flatten() {
         if started.elapsed() >= budget {
             break;
@@ -829,7 +845,9 @@ pub fn detect_claude_workspace() -> String {
         if !project_path.is_dir() {
             continue;
         }
-        let Ok(file_iter) = std::fs::read_dir(&project_path) else { continue };
+        let Ok(file_iter) = std::fs::read_dir(&project_path) else {
+            continue;
+        };
         for file_entry in file_iter.flatten() {
             if started.elapsed() >= budget {
                 break 'outer;
@@ -838,7 +856,9 @@ pub fn detect_claude_workspace() -> String {
             if file_path.extension().and_then(|s| s.to_str()) != Some("jsonl") {
                 continue;
             }
-            let Ok(meta) = file_entry.metadata() else { continue };
+            let Ok(meta) = file_entry.metadata() else {
+                continue;
+            };
             let Ok(mtime) = meta.modified() else { continue };
             let take = match &newest {
                 Some((cur, _, _)) => mtime > *cur,
@@ -850,7 +870,9 @@ pub fn detect_claude_workspace() -> String {
         }
     }
 
-    let Some((_, jsonl, project_dir)) = newest else { return detect_workspace() };
+    let Some((_, jsonl, project_dir)) = newest else {
+        return detect_workspace();
+    };
 
     // The first ~3 lines of a Claude transcript are typically queue-operation
     // records that don't carry `cwd`; the field shows up on the first `user`
@@ -873,7 +895,7 @@ pub fn detect_claude_workspace() -> String {
             };
             // Strip trailing path separators before extracting basename so
             // "C:\foo\bar\" still yields "bar".
-            let trimmed = cwd.trim_end_matches(|c| c == '/' || c == '\\');
+            let trimmed = cwd.trim_end_matches(['/', '\\']);
             if trimmed.is_empty() {
                 continue;
             }
@@ -909,10 +931,7 @@ pub static STARTED_AT: std::sync::OnceLock<std::time::Instant> = std::sync::Once
 /// Process uptime in whole seconds since `STARTED_AT` was initialized.
 /// Returns 0 when uninitialized so callers don't have to guard `Option`.
 pub fn process_uptime_seconds() -> u64 {
-    STARTED_AT
-        .get()
-        .map(|t| t.elapsed().as_secs())
-        .unwrap_or(0)
+    STARTED_AT.get().map(|t| t.elapsed().as_secs()).unwrap_or(0)
 }
 
 /// Best-effort env label: `$ENCHANTER_ENV` or `"local"`.
@@ -1037,8 +1056,7 @@ impl AppState {
     /// the readout responsive to the live event rate.
     fn synthesize_health(&mut self) {
         // Memory: ring-buffer fill ratio.
-        self.health.memory_pct =
-            (self.events.len() as f32 / EVENT_RING_CAPACITY as f32) * 100.0;
+        self.health.memory_pct = (self.events.len() as f32 / EVENT_RING_CAPACITY as f32) * 100.0;
 
         // Sliding window: last 50 events → up to 49 interarrival deltas (ms).
         // Filter out idle gaps (>100ms) so the metric reflects burst-mode
@@ -1050,12 +1068,7 @@ impl AppState {
         let n = self.events.len().min(window);
         if n >= 2 {
             let take = self.events.len() - n;
-            let times: Vec<f64> = self
-                .events
-                .iter()
-                .skip(take)
-                .map(|e| e.time())
-                .collect();
+            let times: Vec<f64> = self.events.iter().skip(take).map(|e| e.time()).collect();
 
             // Prefer real per-tool-call `duration_ms` reported by the Claude
             // Code hook emitter: when present, those are ground truth and
@@ -1118,7 +1131,7 @@ impl AppState {
             // process-CPU once a tokio-metrics integration lands.
             let span = (times.last().copied().unwrap_or(0.0)
                 - times.first().copied().unwrap_or(0.0))
-                .max(0.0);
+            .max(0.0);
             let events_per_sec = if span > 0.0 {
                 (n as f64) / span
             } else {
@@ -1347,10 +1360,7 @@ impl AppState {
 
             // ---- phase pipeline ----------------------------------------
             Event::PhaseEntered(p) => {
-                let phase_name = p
-                    .phase
-                    .clone()
-                    .or_else(|| payload_str(&p.extra, "phase"));
+                let phase_name = p.phase.clone().or_else(|| payload_str(&p.extra, "phase"));
                 if let Some(name) = phase_name.as_deref() {
                     if let Some(ph) = parse_phase(name) {
                         self.session.current_phase = Some(ph);
@@ -1369,9 +1379,7 @@ impl AppState {
                     .and_then(|v| v.as_i64())
                     .filter(|n| *n >= 0)
                     .map(|n| n as u32);
-                let turn_str = turn_n
-                    .map(|n| n.to_string())
-                    .unwrap_or_else(|| "?".into());
+                let turn_str = turn_n.map(|n| n.to_string()).unwrap_or_else(|| "?".into());
                 self.set_plugin_display("emu", format!("{turn_str}±3"));
                 if let Some(n) = turn_n {
                     self.metrics.turns = (n, 3);
@@ -1415,11 +1423,7 @@ impl AppState {
                 self.set_plugin_display("gorgon", format!("{file} hotspot"));
             }
             Event::NagaSpecCheck(p) => {
-                let status = p
-                    .extra
-                    .get("status")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
+                let status = p.extra.get("status").and_then(|v| v.as_str()).unwrap_or("");
                 let display = if status == "clean" {
                     "clean ✓".to_string()
                 } else {
@@ -1675,11 +1679,7 @@ impl AppState {
     /// preserves it there. Called by `apply()` so the bump-last_event logic
     /// downstream still runs.
     fn apply_unknown(&mut self, p: &crate::event::GenericPayload) {
-        let type_tag = p
-            .extra
-            .get("type")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+        let type_tag = p.extra.get("type").and_then(|v| v.as_str()).unwrap_or("");
 
         // lifecycle.<phase> — refresh current_phase from the suffix.
         if let Some(suffix) = type_tag.strip_prefix("lifecycle.") {
@@ -1835,11 +1835,7 @@ impl AppState {
                 }
             }
             "naga.spec_check" => {
-                let status = p
-                    .extra
-                    .get("status")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
+                let status = p.extra.get("status").and_then(|v| v.as_str()).unwrap_or("");
                 let display = if status == "clean" { "clean" } else { "drift" };
                 self.set_plugin_display("naga", display.into());
                 if let Some(idx) = self.plugin_index_by_name("naga") {
@@ -1874,8 +1870,10 @@ impl AppState {
                 self.runtime_metrics.ongoing_tasks = u32_of("ongoing_tasks");
                 self.runtime_metrics.queued_tasks = u32_of("queued_tasks");
                 self.runtime_metrics.blocked_tasks = u32_of("blocked_tasks");
-                self.runtime_metrics.code_written_lifetime_loc = u64_of("code_written_lifetime_loc");
-                self.runtime_metrics.code_modified_lifetime_loc = u64_of("code_modified_lifetime_loc");
+                self.runtime_metrics.code_written_lifetime_loc =
+                    u64_of("code_written_lifetime_loc");
+                self.runtime_metrics.code_modified_lifetime_loc =
+                    u64_of("code_modified_lifetime_loc");
                 self.runtime_metrics.files_created_lifetime = u64_of("files_created_lifetime");
                 self.runtime_metrics.files_modified_lifetime = u64_of("files_modified_lifetime");
                 self.runtime_metrics.tool_calls_lifetime = u64_of("tool_calls_lifetime");
@@ -2057,12 +2055,18 @@ impl AppState {
     }
 
     pub fn next_view(&mut self) {
-        let cur = View::ALL.iter().position(|v| *v == self.active_view).unwrap_or(0);
+        let cur = View::ALL
+            .iter()
+            .position(|v| *v == self.active_view)
+            .unwrap_or(0);
         self.active_view = View::ALL[(cur + 1) % View::ALL.len()];
     }
 
     pub fn prev_view(&mut self) {
-        let cur = View::ALL.iter().position(|v| *v == self.active_view).unwrap_or(0);
+        let cur = View::ALL
+            .iter()
+            .position(|v| *v == self.active_view)
+            .unwrap_or(0);
         self.active_view = View::ALL[(cur + View::ALL.len() - 1) % View::ALL.len()];
     }
 
@@ -2167,9 +2171,13 @@ pub fn detect_claude_plan() -> String {
     let home = std::env::var("HOME")
         .ok()
         .or_else(|| std::env::var("USERPROFILE").ok());
-    let Some(home) = home else { return "Unknown".to_string() };
+    let Some(home) = home else {
+        return "Unknown".to_string();
+    };
     let path = std::path::Path::new(&home).join(".claude.json");
-    let Ok(bytes) = std::fs::read(&path) else { return "Unknown".to_string() };
+    let Ok(bytes) = std::fs::read(&path) else {
+        return "Unknown".to_string();
+    };
     let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
         return "Unknown".to_string();
     };
@@ -2226,7 +2234,9 @@ pub fn detect_claude_usage_today() -> (u64, u64) {
         .or_else(|| std::env::var("USERPROFILE").ok());
     let Some(home) = home else { return (0, 0) };
     let projects = std::path::Path::new(&home).join(".claude").join("projects");
-    let Ok(project_iter) = std::fs::read_dir(&projects) else { return (0, 0) };
+    let Ok(project_iter) = std::fs::read_dir(&projects) else {
+        return (0, 0);
+    };
 
     let cutoff = SystemTime::now()
         .checked_sub(Duration::from_secs(24 * 60 * 60))
@@ -2243,7 +2253,9 @@ pub fn detect_claude_usage_today() -> (u64, u64) {
         if !project_path.is_dir() {
             continue;
         }
-        let Ok(file_iter) = std::fs::read_dir(&project_path) else { continue };
+        let Ok(file_iter) = std::fs::read_dir(&project_path) else {
+            continue;
+        };
         for file_entry in file_iter.flatten() {
             if started.elapsed() >= budget {
                 break 'outer;
@@ -2261,7 +2273,9 @@ pub fn detect_claude_usage_today() -> (u64, u64) {
             if mtime < cutoff {
                 continue;
             }
-            let Ok(file) = std::fs::File::open(&file_path) else { continue };
+            let Ok(file) = std::fs::File::open(&file_path) else {
+                continue;
+            };
             let reader = BufReader::new(file);
             for line in reader.lines().map_while(Result::ok) {
                 if started.elapsed() >= budget {
@@ -2277,7 +2291,7 @@ pub fn detect_claude_usage_today() -> (u64, u64) {
                 // when present; otherwise count (file-level mtime gate is the
                 // outer filter).
                 if let Some(ts) = value.get("timestamp").and_then(|v| v.as_str()) {
-                    if let Some(t) = chrono::DateTime::parse_from_rfc3339(ts).ok() {
+                    if let Ok(t) = chrono::DateTime::parse_from_rfc3339(ts) {
                         let cutoff_dt = chrono::Utc::now() - chrono::Duration::hours(24);
                         if t.with_timezone(&chrono::Utc) < cutoff_dt {
                             continue;
@@ -2287,7 +2301,10 @@ pub fn detect_claude_usage_today() -> (u64, u64) {
                 let Some(usage) = value.get("message").and_then(|m| m.get("usage")) else {
                     continue;
                 };
-                let i = usage.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                let i = usage
+                    .get("input_tokens")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
                 let cc = usage
                     .get("cache_creation_input_tokens")
                     .and_then(|v| v.as_u64())
@@ -2296,8 +2313,15 @@ pub fn detect_claude_usage_today() -> (u64, u64) {
                     .get("cache_read_input_tokens")
                     .and_then(|v| v.as_u64())
                     .unwrap_or(0);
-                let o = usage.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
-                tokens = tokens.saturating_add(i).saturating_add(cc).saturating_add(cr).saturating_add(o);
+                let o = usage
+                    .get("output_tokens")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
+                tokens = tokens
+                    .saturating_add(i)
+                    .saturating_add(cc)
+                    .saturating_add(cr)
+                    .saturating_add(o);
                 if value.get("type").and_then(|v| v.as_str()) == Some("assistant") {
                     messages = messages.saturating_add(1);
                 }
@@ -2363,7 +2387,9 @@ mod tests {
     fn hydra_veto_increments_security_incidents() {
         let mut s = AppState::new();
         let before = s.metrics.security_incidents_session;
-        s.apply(Event::sample_hydra_veto("policy:fs.write outside workspace"));
+        s.apply(Event::sample_hydra_veto(
+            "policy:fs.write outside workspace",
+        ));
         assert_eq!(s.metrics.security_incidents_session, before + 1);
         // Insights are now derived: a non-zero veto count produces a "!" line.
         assert!(s
@@ -2387,7 +2413,11 @@ mod tests {
 
     /// Helper: build an Event::Unknown with the given wire-side type tag and
     /// arbitrary extras (jammed into the `extra` map).
-    fn mk_unknown(type_tag: &str, plugin: Option<&str>, extras: &[(&str, serde_json::Value)]) -> Event {
+    fn mk_unknown(
+        type_tag: &str,
+        plugin: Option<&str>,
+        extras: &[(&str, serde_json::Value)],
+    ) -> Event {
         let mut extra = std::collections::BTreeMap::new();
         extra.insert("type".to_string(), serde_json::json!(type_tag));
         for (k, v) in extras {
@@ -2409,7 +2439,11 @@ mod tests {
     fn unknown_mcp_tool_call_bumps_lifetime_tool_calls() {
         let mut s = AppState::new();
         let before = s.runtime_metrics.tool_calls_lifetime;
-        s.apply(mk_unknown("mcp.tool.call.requested", Some("mcp-client"), &[]));
+        s.apply(mk_unknown(
+            "mcp.tool.call.requested",
+            Some("mcp-client"),
+            &[],
+        ));
         assert_eq!(s.runtime_metrics.tool_calls_lifetime, before + 1);
         // Generic events bump events_count too.
         assert_eq!(s.metrics.events_count, 1);
@@ -2426,7 +2460,10 @@ mod tests {
         let crow = s.plugins.iter().find(|p| p.name == "crow").unwrap();
         assert_eq!(crow.display_value, "0.73 trust");
         assert_eq!(crow.calls, 1);
-        assert!(crow.last_event.is_some(), "last_event must update on Unknown");
+        assert!(
+            crow.last_event.is_some(),
+            "last_event must update on Unknown"
+        );
     }
 
     #[test]
@@ -2485,8 +2522,15 @@ mod tests {
     #[test]
     fn unknown_lifecycle_trust_gate_sets_current_phase() {
         let mut s = AppState::new();
-        s.apply(mk_unknown("lifecycle.trust-gate", Some("orchestrator"), &[]));
-        assert_eq!(s.session.current_phase, Some(crate::event::Phase::TrustGate));
+        s.apply(mk_unknown(
+            "lifecycle.trust-gate",
+            Some("orchestrator"),
+            &[],
+        ));
+        assert_eq!(
+            s.session.current_phase,
+            Some(crate::event::Phase::TrustGate)
+        );
     }
 
     #[test]
@@ -2509,7 +2553,8 @@ mod tests {
             message: None,
             extra: std::collections::BTreeMap::new(),
         };
-        p1.extra.insert("type".into(), serde_json::json!("lifecycle.anchor"));
+        p1.extra
+            .insert("type".into(), serde_json::json!("lifecycle.anchor"));
         s.apply(Event::Unknown(p1));
         assert_eq!(s.session.session_id, "abc123");
 
@@ -2524,9 +2569,13 @@ mod tests {
             message: None,
             extra: std::collections::BTreeMap::new(),
         };
-        p2.extra.insert("type".into(), serde_json::json!("lifecycle.dispatch"));
+        p2.extra
+            .insert("type".into(), serde_json::json!("lifecycle.dispatch"));
         s.apply(Event::Unknown(p2));
-        assert_eq!(s.session.session_id, "abc123", "session_id must lock on first set");
+        assert_eq!(
+            s.session.session_id, "abc123",
+            "session_id must lock on first set"
+        );
 
         // Event 3: an event with no session_id is fine — latched value stays.
         let mut p3 = crate::event::GenericPayload {
@@ -2539,7 +2588,8 @@ mod tests {
             message: None,
             extra: std::collections::BTreeMap::new(),
         };
-        p3.extra.insert("type".into(), serde_json::json!("totally.fake"));
+        p3.extra
+            .insert("type".into(), serde_json::json!("totally.fake"));
         s.apply(Event::Unknown(p3));
         assert_eq!(s.session.session_id, "abc123");
     }
@@ -2586,7 +2636,10 @@ mod tests {
         // arm; the post-apply block must still refresh last_event.
         s.apply(mk_unknown("naga.spec_check", Some("naga"), &[]));
         let naga = s.plugins.iter().find(|p| p.name == "naga").unwrap();
-        assert!(naga.last_event.is_some(), "last_event must populate on every Unknown plugin event");
+        assert!(
+            naga.last_event.is_some(),
+            "last_event must populate on every Unknown plugin event"
+        );
         assert!(naga.calls >= 1);
     }
 

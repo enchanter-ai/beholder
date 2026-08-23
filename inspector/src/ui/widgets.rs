@@ -5,11 +5,11 @@
 //! `status_dot_line`, `panel_block`) return values so views can compose
 //! richer paragraphs around them.
 
-use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Gauge, Paragraph};
+use ratatui::Frame;
 
 use crate::event::Phase;
 use crate::state::PluginStatus;
@@ -58,7 +58,7 @@ pub fn panel_block_with_color<'a>(title: &'a str, focused: bool, border_color: C
 /// at 4 Hz (250 ms), so `period = 2` gives a ~500 ms cycle.
 pub fn pulse_color(base: Color, tick: u64, period: u64) -> Color {
     let period = period.max(1);
-    let bright = (tick / period) % 2 == 0;
+    let bright = (tick / period).is_multiple_of(2);
     if bright {
         base
     } else {
@@ -132,8 +132,10 @@ pub fn status_dot_line(status: PluginStatus, color: Color, text: &str) -> Line<'
 /// `▁▂▃▄▅▆▇█`. If `values.len() > width`, takes the most recent `width`
 /// samples (truncates from the front). Empty slice → "—" repeated to fill.
 pub fn sparkline_string(values: &[u64], width: usize) -> String {
-    const LEVELS: [char; 8] = ['\u{2581}', '\u{2582}', '\u{2583}', '\u{2584}',
-                                '\u{2585}', '\u{2586}', '\u{2587}', '\u{2588}'];
+    const LEVELS: [char; 8] = [
+        '\u{2581}', '\u{2582}', '\u{2583}', '\u{2584}', '\u{2585}', '\u{2586}', '\u{2587}',
+        '\u{2588}',
+    ];
 
     if width == 0 {
         return String::new();
@@ -194,21 +196,9 @@ pub fn render_phase_pipeline(frame: &mut Frame, area: Rect, current: Option<Phas
     let mut spans: Vec<Span> = Vec::with_capacity(PHASES.len() * 4);
     for (i, (_phase, label)) in PHASES.iter().enumerate() {
         let (glyph, glyph_color, label_color) = match current_idx {
-            Some(cur) if i < cur => (
-                "\u{25CF}",
-                theme::STATUS_HEALTHY,
-                theme::TEXT_DIM,
-            ),
-            Some(cur) if i == cur => (
-                "\u{25CF}",
-                theme::ACCENT,
-                theme::ACCENT,
-            ),
-            _ => (
-                "\u{25CB}",
-                theme::TEXT_FAINT,
-                theme::TEXT_FAINT,
-            ),
+            Some(cur) if i < cur => ("\u{25CF}", theme::STATUS_HEALTHY, theme::TEXT_DIM),
+            Some(cur) if i == cur => ("\u{25CF}", theme::ACCENT, theme::ACCENT),
+            _ => ("\u{25CB}", theme::TEXT_FAINT, theme::TEXT_FAINT),
         };
         spans.push(Span::styled(glyph, Style::default().fg(glyph_color)));
         spans.push(Span::raw(" "));

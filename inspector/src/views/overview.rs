@@ -5,7 +5,7 @@
 //! 1. Top status bar    — `Enchanter — LIVE` left, key hints right-aligned
 //! 2. Active session    — workspace, user, current task, file/risk/phase/age
 //! 3. Metrics row       — three side-by-side bordered boxes:
-//!                        Session Metrics | Runtime | System Health
+//!    Session Metrics | Runtime | System Health
 //! 4. Phase pipeline    — single-row bordered box, ASCII `>` separators
 //! 5. Plugins panel     — table: Plugin / Status / Calls / Errors / p95 / p99 / Last
 //! 6. Events panel      — table: Time / Source / Type / Details
@@ -96,7 +96,10 @@ fn render_top_bar(frame: &mut Frame, area: Rect, app: &AppState) {
         ),
     ];
     if app.demo_mode {
-        left_spans.push(Span::styled(" \u{2014} DEMO", Style::default().fg(theme::TEXT_DIM)));
+        left_spans.push(Span::styled(
+            " \u{2014} DEMO",
+            Style::default().fg(theme::TEXT_DIM),
+        ));
     }
     // Loading indicator: when the runtime hasn't emitted any events yet, show
     // a pulsing "waiting for runtime…" pill so the user sees something is
@@ -144,7 +147,12 @@ fn render_top_bar(frame: &mut Frame, area: Rect, app: &AppState) {
 /// v0.5 #4 — replace the top-bar contents with a high-visibility PENDING
 /// APPROVAL banner. ASCII-only ("[a]pprove [v]eto"), no unicode glyphs.
 /// Multiple pending approvals show queue depth.
-fn render_pending_approval_banner(frame: &mut Frame, area: Rect, app: &AppState, pending: &PendingApproval) {
+fn render_pending_approval_banner(
+    frame: &mut Frame,
+    area: Rect,
+    app: &AppState,
+    pending: &PendingApproval,
+) {
     let block = widgets::panel_block_with_color("", false, theme::STATUS_CRITICAL);
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -220,15 +228,33 @@ fn render_active_session(frame: &mut Frame, area: Rect, app: &AppState) {
     }
 
     let s = &app.session;
-    let workspace = if s.workspace.is_empty() { "-".to_string() } else { s.workspace.clone() };
-    let env = if s.env.is_empty() { "-".to_string() } else { s.env.clone() };
-    let session_id = if s.session_id.is_empty() { "-".to_string() } else { s.session_id.clone() };
-    let github_user = if s.github_user.is_empty() { "-".to_string() } else { s.github_user.clone() };
-    let claude_user = if s.claude_user.is_empty() { "-".to_string() } else { s.claude_user.clone() };
+    let workspace = if s.workspace.is_empty() {
+        "-".to_string()
+    } else {
+        s.workspace.clone()
+    };
+    let env = if s.env.is_empty() {
+        "-".to_string()
+    } else {
+        s.env.clone()
+    };
+    let session_id = if s.session_id.is_empty() {
+        "-".to_string()
+    } else {
+        s.session_id.clone()
+    };
+    let github_user = if s.github_user.is_empty() {
+        "-".to_string()
+    } else {
+        s.github_user.clone()
+    };
+    let claude_user = if s.claude_user.is_empty() {
+        "-".to_string()
+    } else {
+        s.claude_user.clone()
+    };
 
-    let uptime = (chrono::Utc::now() - app.started_at)
-        .num_seconds()
-        .max(0) as u64;
+    let uptime = (chrono::Utc::now() - app.started_at).num_seconds().max(0) as u64;
     let plan_color = plan_tier_color(&s.claude_plan);
 
     let task_opt = s
@@ -237,7 +263,11 @@ fn render_active_session(frame: &mut Frame, area: Rect, app: &AppState) {
         .and_then(|id| app.tasks.iter().find(|t| t.task_id == id));
     let task_active_text = match task_opt {
         Some(t) => {
-            let intent = if t.intent.is_empty() { "-" } else { t.intent.as_str() };
+            let intent = if t.intent.is_empty() {
+                "-"
+            } else {
+                t.intent.as_str()
+            };
             format!("{}  {}", t.task_id, intent)
         }
         None => "-".to_string(),
@@ -261,11 +291,7 @@ fn render_active_session(frame: &mut Frame, area: Rect, app: &AppState) {
             .map(phase_label)
             .unwrap_or("-")
             .to_string(),
-        None => s
-            .current_phase
-            .map(phase_label)
-            .unwrap_or("-")
-            .to_string(),
+        None => s.current_phase.map(phase_label).unwrap_or("-").to_string(),
     };
     let age_text = match task_opt {
         Some(t) => fmt_age_seconds(active_age_seconds(t)),
@@ -298,11 +324,8 @@ fn render_active_session(frame: &mut Frame, area: Rect, app: &AppState) {
         kv_row("Session", &session_id),
         kv_row("Uptime", &fmt_uptime(uptime)),
     ];
-    let col1_table = Table::new(
-        col1_rows,
-        [Constraint::Length(11), Constraint::Min(6)],
-    )
-    .column_spacing(1);
+    let col1_table =
+        Table::new(col1_rows, [Constraint::Length(11), Constraint::Min(6)]).column_spacing(1);
     frame.render_widget(col1_table, cols[0]);
 
     // Wall 1 — vertical `│` separator using Borders::LEFT on a bare Block.
@@ -324,11 +347,8 @@ fn render_active_session(frame: &mut Frame, area: Rect, app: &AppState) {
         ]),
         kv_row("Tokens today", &tokens_value),
     ];
-    let col2_table = Table::new(
-        col2_rows,
-        [Constraint::Length(13), Constraint::Min(6)],
-    )
-    .column_spacing(1);
+    let col2_table =
+        Table::new(col2_rows, [Constraint::Length(13), Constraint::Min(6)]).column_spacing(1);
     frame.render_widget(col2_table, cols[2]);
 
     // Wall 2 — vertical `│` separator.
@@ -358,11 +378,8 @@ fn render_active_session(frame: &mut Frame, area: Rect, app: &AppState) {
         kv_row("Phase", &phase_text),
         kv_row("Age", &age_text),
     ];
-    let col3_table = Table::new(
-        col3_rows,
-        [Constraint::Length(12), Constraint::Min(6)],
-    )
-    .column_spacing(1);
+    let col3_table =
+        Table::new(col3_rows, [Constraint::Length(12), Constraint::Min(6)]).column_spacing(1);
     frame.render_widget(col3_table, cols[4]);
 }
 
@@ -416,7 +433,10 @@ fn render_session_metrics(frame: &mut Frame, area: Rect, app: &AppState) {
     let rows = vec![
         kv_row("Turns left", &format!("{} ±{}", m.turns.0, m.turns.1)),
         kv_row("Spent", &fmt_money(m.spent_session_usd)),
-        kv_row("Spend rate", &format!("{}/hr", fmt_money(m.spend_rate_per_hour_usd))),
+        kv_row(
+            "Spend rate",
+            &format!("{}/hr", fmt_money(m.spend_rate_per_hour_usd)),
+        ),
         kv_row("Security", &format!("{}", m.security_incidents_session)),
         kv_row("Drift", &format!("{:.0} %", m.drift_session_pct)),
         kv_row("P95", &format!("{} ms", m.p95_latency_ms as i64)),
@@ -425,12 +445,9 @@ fn render_session_metrics(frame: &mut Frame, area: Rect, app: &AppState) {
         kv_row("Cache hit", &format!("{:.0} %", cache_hit_pct)),
         kv_row("Avg latency", &format!("{} ms", avg_latency_ms as i64)),
     ];
-    let table = Table::new(
-        rows,
-        [Constraint::Min(10), Constraint::Length(12)],
-    )
-    .block(block)
-    .column_spacing(1);
+    let table = Table::new(rows, [Constraint::Min(10), Constraint::Length(12)])
+        .block(block)
+        .column_spacing(1);
     frame.render_widget(table, area);
 }
 
@@ -460,12 +477,9 @@ fn render_runtime_metrics(frame: &mut Frame, area: Rect, app: &AppState) {
         ),
         kv_row("Code LOC", &fmt_count_short(r.code_written_lifetime_loc)),
     ];
-    let table = Table::new(
-        rows,
-        [Constraint::Min(10), Constraint::Length(10)],
-    )
-    .block(block)
-    .column_spacing(1);
+    let table = Table::new(rows, [Constraint::Min(10), Constraint::Length(10)])
+        .block(block)
+        .column_spacing(1);
     frame.render_widget(table, area);
 }
 
@@ -507,12 +521,9 @@ fn render_system_health(frame: &mut Frame, area: Rect, app: &AppState) {
         kv_row("Active tasks", &format!("{active_tasks}")),
         kv_row("Plugin errors", &fmt_count_short(plugin_errors_total)),
     ];
-    let table = Table::new(
-        rows,
-        [Constraint::Min(10), Constraint::Length(11)],
-    )
-    .block(block)
-    .column_spacing(1);
+    let table = Table::new(rows, [Constraint::Min(10), Constraint::Length(11)])
+        .block(block)
+        .column_spacing(1);
     frame.render_widget(table, area);
 }
 
@@ -622,11 +633,7 @@ fn render_plugins_panel(frame: &mut Frame, area: Rect, app: &AppState) {
     // Use the freshest event timestamp as the reference "now" for the
     // relative-age column. Demo and live both stamp `time` as
     // seconds-since-stream-start so this gives stable "Xs ago" values.
-    let now_ref = app
-        .events
-        .iter()
-        .map(|e| e.time())
-        .fold(0.0_f64, f64::max);
+    let now_ref = app.events.iter().map(|e| e.time()).fold(0.0_f64, f64::max);
 
     let rows: Vec<Row> = app
         .plugins
@@ -645,19 +652,21 @@ fn render_plugins_panel(frame: &mut Frame, area: Rect, app: &AppState) {
                 Cell::from(status_text).style(Style::default().fg(status_color)),
                 Cell::from(format!("{health_pct} %")),
                 Cell::from(fmt_num(p.calls)),
-                Cell::from(fmt_num(p.errors))
-                    .style(if p.errors > 0 {
-                        Style::default().fg(theme::STATUS_CRITICAL)
-                    } else {
-                        Style::default().fg(theme::TEXT_PRIMARY)
-                    }),
+                Cell::from(fmt_num(p.errors)).style(if p.errors > 0 {
+                    Style::default().fg(theme::STATUS_CRITICAL)
+                } else {
+                    Style::default().fg(theme::TEXT_PRIMARY)
+                }),
                 Cell::from(format!("{} ms", p.latency_p95_ms as i64)),
                 Cell::from(format!("{} ms", p.latency_p99_ms as i64)),
                 Cell::from(p.display_value.clone()),
                 // RIGHT-aligned per explicit user ask (LTR exception #2).
                 Cell::from(
-                    Line::from(Span::styled(last_seen, Style::default().fg(theme::TEXT_DIM)))
-                        .alignment(Alignment::Right),
+                    Line::from(Span::styled(
+                        last_seen,
+                        Style::default().fg(theme::TEXT_DIM),
+                    ))
+                    .alignment(Alignment::Right),
                 ),
             ]);
             if i == app.selected_plugin_index && focused {
@@ -728,7 +737,7 @@ fn render_events_panel(frame: &mut Frame, area: Rect, app: &AppState) {
 
     // -2 for borders, -1 for header. Show as many events as fit (cap 20).
     let take = (area.height.saturating_sub(3)) as usize;
-    let take = take.max(1).min(20);
+    let take = take.clamp(1, 20);
 
     // Reserve room for fixed columns + spacing; the rest goes to Details so
     // we can truncate that column with ".." rather than letting ratatui clip.
@@ -777,9 +786,10 @@ fn event_row(ev: &Event, detail_max: usize, baseline: f64) -> Row<'_> {
     // the placeholder "unknown". `type_tag` is kept for callers that still
     // need a `&'static str`.
     let type_str = ev.type_str();
-    let source = ev.plugin().map(str::to_string).unwrap_or_else(|| {
-        type_str.split('.').next().unwrap_or("?").to_string()
-    });
+    let source = ev
+        .plugin()
+        .map(str::to_string)
+        .unwrap_or_else(|| type_str.split('.').next().unwrap_or("?").to_string());
     let source_color = theme::plugin_color(&source);
     let tag = type_str.to_string();
     // Per the new spec: color Type by event-family prefix, not by veto.
@@ -1132,9 +1142,21 @@ fn unknown_event_detail(p: &crate::event::GenericPayload) -> String {
         };
     }
     if type_tag == "pech.ledger.appended" {
-        let cost = p.extra.get("cost_usd").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        let inp = p.extra.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
-        let out = p.extra.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+        let cost = p
+            .extra
+            .get("cost_usd")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        let inp = p
+            .extra
+            .get("input_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        let out = p
+            .extra
+            .get("output_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
         return format!("${cost:.4} in/{inp}/out/{out}");
     }
     if type_tag == "crow.trust.scored" {
@@ -1143,7 +1165,11 @@ fn unknown_event_detail(p: &crate::event::GenericPayload) -> String {
             .get("posterior_mean")
             .and_then(|v| v.as_f64())
             .unwrap_or(0.0);
-        let tool = p.extra.get("tool_name").and_then(|v| v.as_str()).unwrap_or("?");
+        let tool = p
+            .extra
+            .get("tool_name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("?");
         return format!("trust={post:.2} tool={tool}");
     }
     if type_tag.starts_with("lifecycle.") {
@@ -1191,8 +1217,11 @@ fn severity_color(s: Severity) -> Color {
 fn kv_row(label: &str, value: &str) -> Row<'static> {
     Row::new(vec![
         Cell::from(label.to_string()).style(Style::default().fg(theme::TEXT_DIM)),
-        Cell::from(value.to_string())
-            .style(Style::default().fg(theme::TEXT_PRIMARY).add_modifier(Modifier::BOLD)),
+        Cell::from(value.to_string()).style(
+            Style::default()
+                .fg(theme::TEXT_PRIMARY)
+                .add_modifier(Modifier::BOLD),
+        ),
     ])
 }
 
@@ -1447,7 +1476,7 @@ mod tests {
             PluginStatus::Disabled,
         ] {
             let (text, _) = status_word(s);
-            assert!(text.chars().all(|c| c.is_ascii()), "non-ASCII in {text}");
+            assert!(text.is_ascii(), "non-ASCII in {text}");
         }
     }
 
@@ -1540,8 +1569,14 @@ mod tests {
         let mut extra = BTreeMap::new();
         extra.insert("reason".into(), serde_json::json!("policy=no-secrets"));
         let p = GenericPayload {
-            time: 0.0, session_id: None, task_id: None, plugin: None,
-            phase: None, severity: None, message: None, extra,
+            time: 0.0,
+            session_id: None,
+            task_id: None,
+            plugin: None,
+            phase: None,
+            severity: None,
+            message: None,
+            extra,
         };
         assert_eq!(unknown_event_detail(&p), "reason: policy=no-secrets");
 
@@ -1552,8 +1587,14 @@ mod tests {
         extra.insert("input_tokens".into(), serde_json::json!(1200));
         extra.insert("output_tokens".into(), serde_json::json!(380));
         let p = GenericPayload {
-            time: 0.0, session_id: None, task_id: None, plugin: None,
-            phase: None, severity: None, message: None, extra,
+            time: 0.0,
+            session_id: None,
+            task_id: None,
+            plugin: None,
+            phase: None,
+            severity: None,
+            message: None,
+            extra,
         };
         assert_eq!(unknown_event_detail(&p), "$0.0042 in/1200/out/380");
 
@@ -1561,23 +1602,35 @@ mod tests {
         let mut extra = BTreeMap::new();
         extra.insert("type".into(), serde_json::json!("mcp.tool.call.requested"));
         extra.insert("tool".into(), serde_json::json!("read_file"));
-        extra.insert(
-            "args".into(),
-            serde_json::json!({"path": "src/router.ts"}),
-        );
+        extra.insert("args".into(), serde_json::json!({"path": "src/router.ts"}));
         let p = GenericPayload {
-            time: 0.0, session_id: None, task_id: None, plugin: None,
-            phase: None, severity: None, message: None, extra,
+            time: 0.0,
+            session_id: None,
+            task_id: None,
+            plugin: None,
+            phase: None,
+            severity: None,
+            message: None,
+            extra,
         };
-        assert_eq!(unknown_event_detail(&p), "tool=read_file path=src/router.ts");
+        assert_eq!(
+            unknown_event_detail(&p),
+            "tool=read_file path=src/router.ts"
+        );
 
         // 4: lifecycle.<phase> synthesis
         let mut extra = BTreeMap::new();
         extra.insert("type".into(), serde_json::json!("lifecycle.dispatch"));
         extra.insert("elapsed_ms".into(), serde_json::json!(27));
         let p = GenericPayload {
-            time: 0.0, session_id: None, task_id: None, plugin: None,
-            phase: None, severity: None, message: None, extra,
+            time: 0.0,
+            session_id: None,
+            task_id: None,
+            plugin: None,
+            phase: None,
+            severity: None,
+            message: None,
+            extra,
         };
         assert_eq!(unknown_event_detail(&p), "phase=dispatch (27 ms)");
 
@@ -1586,11 +1639,20 @@ mod tests {
         extra.insert("type".into(), serde_json::json!("totally.fake"));
         extra.insert("custom".into(), serde_json::json!(42));
         let p = GenericPayload {
-            time: 0.0, session_id: None, task_id: None, plugin: None,
-            phase: None, severity: None, message: None, extra,
+            time: 0.0,
+            session_id: None,
+            task_id: None,
+            plugin: None,
+            phase: None,
+            severity: None,
+            message: None,
+            extra,
         };
         let got = unknown_event_detail(&p);
-        assert!(got.contains("custom"), "fallback must include extras: got {got}");
+        assert!(
+            got.contains("custom"),
+            "fallback must include extras: got {got}"
+        );
     }
 
     #[test]
@@ -1639,8 +1701,14 @@ mod tests {
         let mut extra = BTreeMap::new();
         extra.insert("cost_usd".into(), serde_json::json!(1.23));
         let ev = Event::Unknown(GenericPayload {
-            time: 0.0, session_id: None, task_id: None, plugin: None,
-            phase: None, severity: None, message: None, extra,
+            time: 0.0,
+            session_id: None,
+            task_id: None,
+            plugin: None,
+            phase: None,
+            severity: None,
+            message: None,
+            extra,
         });
         assert_eq!(event_cost(&ev), "$1.23");
 
@@ -1648,8 +1716,14 @@ mod tests {
         let mut extra = BTreeMap::new();
         extra.insert("cost_usd".into(), serde_json::json!(0.0));
         let ev = Event::Unknown(GenericPayload {
-            time: 0.0, session_id: None, task_id: None, plugin: None,
-            phase: None, severity: None, message: None, extra,
+            time: 0.0,
+            session_id: None,
+            task_id: None,
+            plugin: None,
+            phase: None,
+            severity: None,
+            message: None,
+            extra,
         });
         assert_eq!(event_cost(&ev), "-");
     }
@@ -1664,8 +1738,14 @@ mod tests {
         extra.insert("type".into(), serde_json::json!("lifecycle.dispatch"));
         extra.insert("elapsed_ms".into(), serde_json::json!(27));
         let ev = Event::Unknown(GenericPayload {
-            time: 0.0, session_id: None, task_id: None, plugin: None,
-            phase: None, severity: None, message: None, extra,
+            time: 0.0,
+            session_id: None,
+            task_id: None,
+            plugin: None,
+            phase: None,
+            severity: None,
+            message: None,
+            extra,
         });
         assert_eq!(event_duration(&ev), "27 ms");
 
@@ -1673,15 +1753,26 @@ mod tests {
         let mut extra = BTreeMap::new();
         extra.insert("duration_ms".into(), serde_json::json!(150));
         let ev = Event::Unknown(GenericPayload {
-            time: 0.0, session_id: None, task_id: None, plugin: None,
-            phase: None, severity: None, message: None, extra,
+            time: 0.0,
+            session_id: None,
+            task_id: None,
+            plugin: None,
+            phase: None,
+            severity: None,
+            message: None,
+            extra,
         });
         assert_eq!(event_duration(&ev), "150 ms");
 
         // Absent → "-".
         let ev = Event::Unknown(GenericPayload {
-            time: 0.0, session_id: None, task_id: None, plugin: None,
-            phase: None, severity: None, message: None,
+            time: 0.0,
+            session_id: None,
+            task_id: None,
+            plugin: None,
+            phase: None,
+            severity: None,
+            message: None,
             extra: BTreeMap::new(),
         });
         assert_eq!(event_duration(&ev), "-");

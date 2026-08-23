@@ -30,10 +30,7 @@ impl Drop for TmpPathGuard {
             // append .1 to whatever the existing extension is
             format!(
                 "{}.1",
-                self.path
-                    .extension()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("")
+                self.path.extension().and_then(|s| s.to_str()).unwrap_or("")
             ),
         );
         let _ = std::fs::remove_file(&rotated);

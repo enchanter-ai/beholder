@@ -24,14 +24,16 @@ async fn approval_round_trip_over_socket_control() {
 
     // Server task: accept ONE connection, write a request.approval line,
     // then read until newline and stash the bytes into a oneshot.
-    let (server_reply_tx, server_reply_rx) =
-        tokio::sync::oneshot::channel::<String>();
+    let (server_reply_tx, server_reply_rx) = tokio::sync::oneshot::channel::<String>();
     let server = tokio::spawn(async move {
         let (sock, _peer) = listener.accept().await.expect("accept");
         let (read_half, mut write_half) = sock.into_split();
         // Write a request.approval JSONL line.
         let req = r#"{"type":"request.approval","time":1.0,"correlation_id":"cid-roundtrip","plugin":"trust-pin","reason":"schema digest mismatch","phase":"trust-gate"}"#;
-        write_half.write_all(req.as_bytes()).await.expect("write req");
+        write_half
+            .write_all(req.as_bytes())
+            .await
+            .expect("write req");
         write_half.write_all(b"\n").await.expect("write nl");
         write_half.flush().await.expect("flush");
 
@@ -51,7 +53,12 @@ async fn approval_round_trip_over_socket_control() {
     // Read the inbound request.approval event.
     let evt = transport.recv().await.expect("inbound event");
     let cid = match &evt {
-        Event::RequestApproval { correlation_id, plugin, reason, .. } => {
+        Event::RequestApproval {
+            correlation_id,
+            plugin,
+            reason,
+            ..
+        } => {
             assert_eq!(plugin, "trust-pin");
             assert_eq!(reason, "schema digest mismatch");
             correlation_id.clone()
@@ -118,6 +125,9 @@ async fn control_socket_is_connected() {
         .await
         .expect("transport open");
     let writer = transport.writer();
-    assert!(writer.is_connected().await, "writer must be connected for SocketControl");
+    assert!(
+        writer.is_connected().await,
+        "writer must be connected for SocketControl"
+    );
     let _ = server.await;
 }

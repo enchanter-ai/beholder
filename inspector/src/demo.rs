@@ -28,8 +28,7 @@ pub fn spawn_demo_emitter(tx: Sender<Event>) {
 
 async fn run(tx: Sender<Event>) {
     // PRNG: simple LCG seeded from process start nanos.
-    let seed = Instant::now().elapsed().subsec_nanos() as u64
-        ^ 0x9E37_79B9_7F4A_7C15u64;
+    let seed = Instant::now().elapsed().subsec_nanos() as u64 ^ 0x9E37_79B9_7F4A_7C15u64;
     let mut prng = Lcg::new(seed.wrapping_add(1));
 
     // Wall-clock for synthetic `time` field on events.
@@ -81,7 +80,7 @@ async fn run(tx: Sender<Event>) {
     ];
 
     for v in bootstrap {
-        if let Err(_) = send_value(&tx, v).await {
+        if send_value(&tx, v).await.is_err() {
             return;
         }
     }
@@ -130,7 +129,10 @@ async fn run(tx: Sender<Event>) {
             let task_id = if active_tasks.is_empty() {
                 format!("T-{}", task_serial)
             } else {
-                format!("T-{}", active_tasks[(prng.next() as usize) % active_tasks.len()])
+                format!(
+                    "T-{}",
+                    active_tasks[(prng.next() as usize) % active_tasks.len()]
+                )
             };
             let phase = phases[(prng.next() as usize) % phases.len()];
             let _ = send_value(
@@ -251,7 +253,7 @@ async fn run(tx: Sender<Event>) {
                 }),
                 3 => json!({
                     "type":"naga.spec_check","time":t,"plugin":"naga","session_id":session_id,
-                    "status": if prng.next() % 4 == 0 { "drift" } else { "clean" },
+                    "status": if prng.next().is_multiple_of(4) { "drift" } else { "clean" },
                 }),
                 4 => json!({
                     "type":"lich.review","time":t,"plugin":"lich","session_id":session_id,
@@ -269,12 +271,16 @@ async fn run(tx: Sender<Event>) {
         // 3) Periodic emissions on counter cadence.
 
         // Task lifecycle: spin up a new task every 5–10 events.
-        if counter % (5 + (prng.next() % 6)) == 0 {
+        if counter.is_multiple_of(5 + (prng.next() % 6)) {
             let id = task_serial;
             task_serial = task_serial.saturating_add(1);
             active_tasks.push(id);
-            let intent = ["optimize routing", "fix auth bug", "add tests", "refactor billing"]
-                [(prng.next() as usize) % 4];
+            let intent = [
+                "optimize routing",
+                "fix auth bug",
+                "add tests",
+                "refactor billing",
+            ][(prng.next() as usize) % 4];
             let file = files[(prng.next() as usize) % files.len()];
             let _ = send_value(
                 &tx,
@@ -286,7 +292,7 @@ async fn run(tx: Sender<Event>) {
             .await;
         }
         // Update an active task.
-        if !active_tasks.is_empty() && counter % 4 == 0 {
+        if !active_tasks.is_empty() && counter.is_multiple_of(4) {
             let pick = (prng.next() as usize) % active_tasks.len();
             let id = active_tasks[pick];
             let phase = phases[(prng.next() as usize) % phases.len()];
@@ -302,7 +308,7 @@ async fn run(tx: Sender<Event>) {
             .await;
         }
         // Complete the oldest task occasionally.
-        if active_tasks.len() > 3 && counter % 7 == 0 {
+        if active_tasks.len() > 3 && counter.is_multiple_of(7) {
             let id = active_tasks.remove(0);
             let _ = send_value(
                 &tx,
@@ -315,7 +321,7 @@ async fn run(tx: Sender<Event>) {
         }
 
         // pech.ledger every 5–10 events — cumulative cost grows.
-        if counter % (5 + (prng.next() % 6)) == 0 {
+        if counter.is_multiple_of(5 + (prng.next() % 6)) {
             let cost = 0.002 + (prng.next() % 50) as f64 / 1000.0;
             session_cost += cost;
             daily_cost += cost;
@@ -343,15 +349,15 @@ async fn run(tx: Sender<Event>) {
         // Cadence dropped from 10 to 5 so the RUNTIME box populates quickly
         // on a fresh launch (10 was enough cycles that early-quit users saw
         // zeros on every counter and reported it as a bug).
-        if counter % 5 == 0 {
+        if counter.is_multiple_of(5) {
             let ongoing = 5 + (prng.next() % 5);
             tests_run = tests_run.saturating_add(prng.next() % 5);
-            if counter % 30 == 0 {
+            if counter.is_multiple_of(30) {
                 prs = prs.saturating_add(1);
             }
             let open_sessions = 3u32;
             let queued_tasks = 2u32;
-            let blocked_tasks = (counter % 4 == 0) as u32;
+            let blocked_tasks = counter.is_multiple_of(4) as u32;
             tracing::debug!(
                 counter,
                 open_sessions,
@@ -383,7 +389,7 @@ async fn run(tx: Sender<Event>) {
         }
 
         // plugin.health every ~20 events on a rotating plugin.
-        if counter % 20 == 0 {
+        if counter.is_multiple_of(20) {
             let p = plugin_names[(counter as usize / 20) % plugin_names.len()];
             let h = 0.7 + (prng.next() % 30) as f64 / 100.0;
             let _ = send_value(

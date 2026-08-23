@@ -3,11 +3,11 @@
 //! Top: status counters. Middle: sortable table over `app.tasks`. Bottom:
 //! detail pane for the selected row. Empty state when the runtime is idle.
 
-use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Cell, Paragraph, Row, Table, Wrap};
+use ratatui::Frame;
 
 use crate::event::Phase;
 use crate::state::{AppState, Risk, SortMode, TaskState, TaskStatus};
@@ -199,8 +199,8 @@ pub fn render(frame: &mut Frame, area: Rect, app: &AppState) {
     }
 
     if app.tasks.is_empty() {
-        let p = Paragraph::new("(no active tasks \u{2014} runtime is idle)")
-            .style(theme::dim_style());
+        let p =
+            Paragraph::new("(no active tasks \u{2014} runtime is idle)").style(theme::dim_style());
         frame.render_widget(p, chunks[cur]);
     } else {
         render_table(frame, chunks[cur], app);
@@ -297,9 +297,7 @@ fn render_table(frame: &mut Frame, area: Rect, app: &AppState) {
     .map(|h| Cell::from(h).style(theme::title_style()));
     let header = Row::new(header_cells).height(1);
 
-    let selected_row_pos = order
-        .iter()
-        .position(|i| *i == app.selected_task_index);
+    let selected_row_pos = order.iter().position(|i| *i == app.selected_task_index);
 
     // Width budget for the flexible "intent" column.
     let fixed = 12 + 1 + 8 + 1 + 9 + 1 + 18 + 1 + 10 + 1 + 5 + 1 + 7;
@@ -321,10 +319,8 @@ fn render_table(frame: &mut Frame, area: Rect, app: &AppState) {
                     .style(Style::default().fg(status_color(t.status))),
                 Cell::from(intent).style(Style::default().fg(theme::TEXT_PRIMARY)),
                 Cell::from(where_).style(Style::default().fg(theme::TEXT_DIM)),
-                Cell::from(phase_label(t.phase))
-                    .style(Style::default().fg(theme::TEXT_DIM)),
-                Cell::from(risk_label(t.risk))
-                    .style(Style::default().fg(risk_color(t.risk))),
+                Cell::from(phase_label(t.phase)).style(Style::default().fg(theme::TEXT_DIM)),
+                Cell::from(risk_label(t.risk)).style(Style::default().fg(risk_color(t.risk))),
                 Cell::from(fmt_age_seconds(t.age_seconds))
                     .style(Style::default().fg(theme::TEXT_DIM)),
             ])
@@ -371,8 +367,7 @@ fn render_detail(frame: &mut Frame, area: Rect, app: &AppState) {
     }
 
     if app.tasks.is_empty() {
-        let p =
-            Paragraph::new("(select a task to inspect)").style(theme::dim_style());
+        let p = Paragraph::new("(select a task to inspect)").style(theme::dim_style());
         frame.render_widget(p, inner);
         return;
     }

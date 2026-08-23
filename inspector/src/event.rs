@@ -493,7 +493,9 @@ impl Event {
 
             Event::TaskUpdated { task_id, .. } => Some(task_id.as_str()),
 
-            Event::HydraVeto { .. } | Event::RuntimeMetrics { .. } | Event::RequestApproval { .. } => None,
+            Event::HydraVeto { .. }
+            | Event::RuntimeMetrics { .. }
+            | Event::RequestApproval { .. } => None,
 
             Event::SessionStarted(p)
             | Event::SessionOpened(p)

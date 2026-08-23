@@ -29,10 +29,7 @@ fn main() -> io::Result<()> {
         match args[i].as_str() {
             "--speed" => {
                 i += 1;
-                speed = args
-                    .get(i)
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(1.0);
+                speed = args.get(i).and_then(|s| s.parse().ok()).unwrap_or(1.0);
             }
             "-h" | "--help" => {
                 eprintln!(
@@ -89,7 +86,9 @@ fn extract_time(line: &str) -> Option<f64> {
     let rest = &line[idx + key.len()..];
     let rest = rest.trim_start();
     let end = rest
-        .find(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-' || c == 'e' || c == 'E' || c == '+'))
+        .find(|c: char| {
+            !(c.is_ascii_digit() || c == '.' || c == '-' || c == 'e' || c == 'E' || c == '+')
+        })
         .unwrap_or(rest.len());
     rest[..end].parse().ok()
 }

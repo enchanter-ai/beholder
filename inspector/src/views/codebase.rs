@@ -3,11 +3,11 @@
 //! Two columns: file activity heat (left) and spec-check status per file
 //! (right). Bottom strip summarizes lifetime + session totals.
 
-use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Cell, Paragraph, Row, Table};
+use ratatui::Frame;
 
 use crate::event::Event;
 use crate::state::AppState;
@@ -60,7 +60,9 @@ fn heat_bar(count: u64, max: u64) -> String {
     if max == 0 {
         return "░".repeat(10);
     }
-    let filled = ((count as f64 / max as f64) * 10.0).round().clamp(0.0, 10.0) as usize;
+    let filled = ((count as f64 / max as f64) * 10.0)
+        .round()
+        .clamp(0.0, 10.0) as usize;
     let mut s = String::with_capacity(10);
     for _ in 0..filled {
         s.push('\u{2588}');
@@ -127,7 +129,7 @@ fn render_hotspots(frame: &mut Frame, area: Rect, app: &AppState) {
     }
 
     let mut sorted: Vec<(String, u64)> = counts.into_iter().collect();
-    sorted.sort_by(|a, b| b.1.cmp(&a.1));
+    sorted.sort_by_key(|&(_, c)| std::cmp::Reverse(c));
     sorted.truncate(15);
 
     let max = sorted.iter().map(|(_, c)| *c).max().unwrap_or(1);
@@ -195,19 +197,18 @@ fn render_spec_health(frame: &mut Frame, area: Rect, app: &AppState) {
 
     for ev in &app.events {
         if let Event::NagaSpecCheck(p) = ev {
-            let file = match extract_str(&p.extra, "file")
-                .or_else(|| extract_str(&p.extra, "path"))
+            let file = match extract_str(&p.extra, "file").or_else(|| extract_str(&p.extra, "path"))
             {
                 Some(f) => f.to_string(),
                 None => continue,
             };
-            let status = extract_str(&p.extra, "status")
-                .unwrap_or("—")
-                .to_string();
+            let status = extract_str(&p.extra, "status").unwrap_or("—").to_string();
             let drift = extract_u64(&p.extra, "drift_count")
                 .or_else(|| extract_u64(&p.extra, "drift"))
                 .unwrap_or(0);
-            let entry = latest.entry(file).or_insert((p.time, status.clone(), drift));
+            let entry = latest
+                .entry(file)
+                .or_insert((p.time, status.clone(), drift));
             if p.time >= entry.0 {
                 *entry = (p.time, status, drift);
             }
@@ -225,7 +226,11 @@ fn render_spec_health(frame: &mut Frame, area: Rect, app: &AppState) {
     }
 
     let mut entries: Vec<(String, (f64, String, u64))> = latest.into_iter().collect();
-    entries.sort_by(|a, b| b.1 .0.partial_cmp(&a.1 .0).unwrap_or(std::cmp::Ordering::Equal));
+    entries.sort_by(|a, b| {
+        b.1 .0
+            .partial_cmp(&a.1 .0)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     entries.truncate(15);
 
     let header = Row::new(vec![

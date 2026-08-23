@@ -14,7 +14,7 @@ fn log_path() -> PathBuf {
     let base = std::env::var_os("XDG_CACHE_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("LOCALAPPDATA").map(PathBuf::from))
-        .or_else(|| dirs_cache_fallback())
+        .or_else(dirs_cache_fallback)
         .unwrap_or_else(std::env::temp_dir);
     base.join("enchanter").join("inspector.log")
 }
@@ -33,7 +33,9 @@ fn dirs_cache_fallback() -> Option<PathBuf> {
 const MAX_LOG_BYTES: u64 = 5 * 1024 * 1024; // 5 MB
 
 fn rotate_log_if_needed(path: &std::path::Path) {
-    let Ok(meta) = std::fs::metadata(path) else { return };
+    let Ok(meta) = std::fs::metadata(path) else {
+        return;
+    };
     if meta.len() <= MAX_LOG_BYTES {
         return;
     }

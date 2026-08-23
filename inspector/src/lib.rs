@@ -8,13 +8,13 @@
 //! - `ui`        — shared theme, widgets, layout primitives
 //! - `views`     — per-view rendering (overview, plugins, events, ...)
 
-pub mod event;
-pub mod schema;
-pub mod transport;
-pub mod state;
 pub mod app;
 pub mod control;
 pub mod demo;
+pub mod event;
+pub mod schema;
+pub mod state;
+pub mod transport;
 pub mod ui;
 pub mod views;
 

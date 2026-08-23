@@ -4,11 +4,11 @@
 //! from `app.runtime_metrics`; the Trend strip falls back to em-dash
 //! placeholders when no event-derived series is available yet.
 
-use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
+use ratatui::Frame;
 
 use crate::state::AppState;
 use crate::ui::theme;
@@ -258,7 +258,7 @@ fn render_trend(frame: &mut Frame, area: Rect, _app: &AppState) {
     // Synthesize-from-history is out of scope here (we don't keep per-minute
     // bucketed series in AppState). Render placeholders at 60-cell width so
     // the layout is right; a future iteration can fill these in.
-    let width: usize = (inner.width as usize).min(60).max(8);
+    let width: usize = (inner.width as usize).clamp(8, 60);
     let placeholder = widgets::sparkline_string(&[], width);
 
     let label_color = theme::TEXT_DIM;

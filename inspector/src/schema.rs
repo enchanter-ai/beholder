@@ -66,7 +66,7 @@ fn definitions() -> &'static serde_json::Map<String, Value> {
 
 /// Resolve a `$ref` once. Returns the referenced node if the ref matches
 /// `#/definitions/<name>` and the name exists; otherwise returns `node` as-is.
-fn deref<'a>(node: &'a Value) -> &'a Value {
+fn deref(node: &Value) -> &Value {
     if let Some(Value::String(r)) = node.get("$ref") {
         if let Some(name) = r.strip_prefix("#/definitions/") {
             if let Some(target) = definitions().get(name) {
@@ -163,9 +163,7 @@ fn check(node: &Value, value: &Value, path: &mut Vec<String>) -> Result<(), Sche
             }
         }
 
-        let properties = schema
-            .get("properties")
-            .and_then(Value::as_object);
+        let properties = schema.get("properties").and_then(Value::as_object);
 
         if let Some(props) = properties {
             for (key, sub_schema) in props {
@@ -189,9 +187,24 @@ fn check(node: &Value, value: &Value, path: &mut Vec<String>) -> Result<(), Sche
         }
     }
 
-    // oneOf — first match wins. If none match, prefer the failure from the
-    // branch whose `type` discriminator matched the input — that's the
-    // "intended" branch. Fall back to deepest-path otherwise.
+    // oneOf — post-v0.6 semantics. Branches are tried in order; the first that
+    // validates wins. Strict variants come first and each pins its `type` via a
+    // const discriminator, so a well-typed, well-shaped payload matches its
+    // strict branch. When a strict branch fails, the permissive generic branch
+    // (any string `type` + `time`, arbitrary extras) is the fallback — that is
+    // where unknown discriminators and known-but-underspecified payloads land.
+    //
+    // The generic branch still enforces the handful of properties it *does*
+    // declare (`time` minimum, the `severity`/`phase` enums, string types), so
+    // a payload that trips one of those shared constraints — e.g. hydra.veto
+    // with a `severity` outside the ladder — is rejected by both the strict and
+    // the generic branch and does not slip through. A wrong-type value on a
+    // strict-only field (not declared on the generic branch) is an allowed
+    // extra there, so it falls back and validates.
+    //
+    // On total failure, prefer the error from the branch whose `type`
+    // discriminator matched the input (the "intended" branch); fall back to the
+    // deepest-path error otherwise.
     if let Some(Value::Array(branches)) = schema.get("oneOf") {
         let mut best: Option<(SchemaError, bool)> = None;
         for branch in branches {
@@ -319,7 +332,10 @@ mod tests {
             "type": "hydra.veto", "time": 1.0, "policy": "p", "reason": "r",
             "action": "a", "severity": "fatal", "payload": null
         });
-        assert!(validate(&v).is_err(), "bad severity in strict branch should reject");
+        assert!(
+            validate(&v).is_err(),
+            "bad severity in strict branch should reject"
+        );
     }
 
     #[test]

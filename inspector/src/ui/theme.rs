@@ -44,13 +44,13 @@ pub const PLUGIN_WIXIE: Color = Color::Rgb(220, 100, 220);
 // category. All chosen from constants above to keep palette discipline.
 
 pub const BORDER_TITLE: Color = Color::Rgb(255, 200, 70); // top bar — warm gold, distinct from cool palette
-pub const BORDER_SESSION: Color = ACCENT;            // active session — cyan
-pub const BORDER_METRICS: Color = PLUGIN_PECH;       // session metrics — orange
-pub const BORDER_RUNTIME: Color = STATUS_NEUTRAL;    // runtime — blue
-pub const BORDER_HEALTH: Color = STATUS_HEALTHY;     // system health — green
-pub const BORDER_PLUGINS: Color = PLUGIN_DJINN;      // plugins — purple
-pub const BORDER_EVENTS: Color = TEXT_DIM;           // events — grey
-pub const BORDER_PIPELINE: Color = PLUGIN_WIXIE;     // phase pipeline — magenta
+pub const BORDER_SESSION: Color = ACCENT; // active session — cyan
+pub const BORDER_METRICS: Color = PLUGIN_PECH; // session metrics — orange
+pub const BORDER_RUNTIME: Color = STATUS_NEUTRAL; // runtime — blue
+pub const BORDER_HEALTH: Color = STATUS_HEALTHY; // system health — green
+pub const BORDER_PLUGINS: Color = PLUGIN_DJINN; // plugins — purple
+pub const BORDER_EVENTS: Color = TEXT_DIM; // events — grey
+pub const BORDER_PIPELINE: Color = PLUGIN_WIXIE; // phase pipeline — magenta
 
 /// Map a plugin name (lowercase) to its accent color. Unknown names fall back
 /// to `TEXT_PRIMARY` so callers never have to handle an `Option`.
@@ -74,9 +74,7 @@ pub fn plugin_color(name: &str) -> Color {
 
 /// Default panel chrome: dim border, primary text, dark background.
 pub fn panel_style() -> Style {
-    Style::default()
-        .fg(TEXT_PRIMARY)
-        .bg(BG)
+    Style::default().fg(TEXT_PRIMARY).bg(BG)
 }
 
 /// Focused-panel chrome: bright cyan border to draw the eye.
@@ -89,9 +87,7 @@ pub fn panel_focused_style() -> Style {
 
 /// Bold accent style for panel titles and section headings.
 pub fn title_style() -> Style {
-    Style::default()
-        .fg(ACCENT)
-        .add_modifier(Modifier::BOLD)
+    Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)
 }
 
 /// Dim style for secondary labels and inactive rows.

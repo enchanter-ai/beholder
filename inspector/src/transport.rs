@@ -564,7 +564,12 @@ async fn dispatch_line(bytes: &[u8], tx: &mpsc::Sender<Event>, kind: &'static st
         return true;
     }
     if bytes.len() > MAX_LINE_BYTES {
-        tracing::warn!(bytes = bytes.len(), max = MAX_LINE_BYTES, kind, "dropping oversized line");
+        tracing::warn!(
+            bytes = bytes.len(),
+            max = MAX_LINE_BYTES,
+            kind,
+            "dropping oversized line"
+        );
         return true;
     }
     let line = match std::str::from_utf8(bytes) {
@@ -637,7 +642,7 @@ where
                             match reader.read(&mut sink).await {
                                 Ok(0) => return,
                                 Ok(n) => {
-                                    if let Some(_) = sink[..n].iter().position(|&b| b == b'\n') {
+                                    if sink[..n].iter().position(|&b| b == b'\n').is_some() {
                                         break;
                                     }
                                 }
@@ -727,8 +732,8 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_nanos())
             .unwrap_or(0);
-        let path = std::env::temp_dir()
-            .join(format!("enchanter_inspector_test_{}_{}.jsonl", pid, nanos));
+        let path =
+            std::env::temp_dir().join(format!("enchanter_inspector_test_{}_{}.jsonl", pid, nanos));
 
         // Write 3 valid lines + 1 malformed. Validity is determined by what
         // `crate::event::parse_line` accepts — events need a `type` discriminator

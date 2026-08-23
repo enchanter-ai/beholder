@@ -4,6 +4,6 @@
 //! - `widgets` — reusable composite widgets (sparklines, badges, tables)
 //! - `layout`  — chrome (header, footer, status bar) and split helpers
 
+pub mod layout;
 pub mod theme;
 pub mod widgets;
-pub mod layout;

@@ -6,11 +6,11 @@
 
 use std::collections::BTreeMap;
 
-use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Cell, Paragraph, Row, Table, Wrap};
+use ratatui::Frame;
 
 use crate::event::{Event, Severity};
 use crate::state::AppState;
@@ -44,7 +44,10 @@ fn is_veto_relevant(ev: &Event) -> bool {
     if ev.type_tag().contains("veto") {
         return true;
     }
-    matches!(ev.severity(), Some(Severity::High) | Some(Severity::Critical))
+    matches!(
+        ev.severity(),
+        Some(Severity::High) | Some(Severity::Critical)
+    )
 }
 
 /// Pull a string field from the loose payload of a generic event by name.
@@ -62,9 +65,7 @@ fn payload_field(ev: &Event, key: &str) -> String {
             match dbg.find(&needle) {
                 Some(at) => {
                     let rest = &dbg[at + needle.len()..];
-                    let end = rest
-                        .find(|c: char| c == ',' || c == '}' || c == ')')
-                        .unwrap_or(rest.len().min(60));
+                    let end = rest.find([',', '}', ')']).unwrap_or(rest.len().min(60));
                     rest[..end].trim().trim_matches('"').to_string()
                 }
                 None => "—".into(),
@@ -92,7 +93,11 @@ fn phase_for(ev: &Event) -> Option<String> {
         return Some(p.clone());
     }
     let v = payload_field(ev, "phase");
-    if v == "—" || v.is_empty() { None } else { Some(v) }
+    if v == "—" || v.is_empty() {
+        None
+    } else {
+        Some(v)
+    }
 }
 
 pub fn render(frame: &mut Frame, area: Rect, app: &AppState) {
@@ -138,13 +143,18 @@ fn render_stat_row(frame: &mut Frame, area: Rect, app: &AppState) {
     let lifetime_vetoes = app.runtime_metrics.vetoes_lifetime;
     let policy_mode = "strict"; // wire-format doesn't carry mode; default per spec
 
-    // Sandbox: derive from any event whose type tag mentions "sandbox" → on,
-    // otherwise default to "on" per spec.
+    // Sandbox: derive from any event whose type tag mentions "sandbox" → on.
+    // With no events yet we can't tell, so default to "on" per spec; once
+    // events exist but none mention sandbox, report "off".
     let sandbox_on = app
         .events
         .iter()
         .any(|ev| ev.type_tag().contains("sandbox"));
-    let sandbox = if sandbox_on || app.events.is_empty() { "on" } else { "on" };
+    let sandbox = if sandbox_on || app.events.is_empty() {
+        "on"
+    } else {
+        "off"
+    };
 
     widgets::render_metric_card(
         frame,
@@ -152,7 +162,11 @@ fn render_stat_row(frame: &mut Frame, area: Rect, app: &AppState) {
         "Vetoes (session)",
         &format!("{}", session_vetoes),
         None,
-        if session_vetoes > 0 { theme::STATUS_CRITICAL } else { theme::STATUS_HEALTHY },
+        if session_vetoes > 0 {
+            theme::STATUS_CRITICAL
+        } else {
+            theme::STATUS_HEALTHY
+        },
     );
     widgets::render_metric_card(
         frame,
@@ -209,8 +223,8 @@ fn render_recent_decisions(frame: &mut Frame, area: Rect, app: &AppState) {
     decisions.truncate(inner.height.saturating_sub(1) as usize);
 
     if decisions.is_empty() {
-        let p = Paragraph::new("(no veto or high-severity decisions yet)")
-            .style(theme::dim_style());
+        let p =
+            Paragraph::new("(no veto or high-severity decisions yet)").style(theme::dim_style());
         frame.render_widget(p, inner);
         return;
     }
@@ -349,7 +363,9 @@ fn render_phase_row(frame: &mut Frame, area: Rect, app: &AppState) {
         .flat_map(|ph| {
             let n = counts.get(*ph).copied().unwrap_or(0);
             let style = if n > 0 {
-                Style::default().fg(theme::STATUS_WARNING).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(theme::STATUS_WARNING)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 theme::dim_style()
             };

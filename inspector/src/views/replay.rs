@@ -5,11 +5,11 @@
 //! Actual playback animation (tick advance, jump-to-next-veto, etc.) is the
 //! `app.rs` event loop's job; this view only surfaces what's already in state.
 
-use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Cell, Paragraph, Row, Table, Wrap};
+use ratatui::Frame;
 
 use crate::event::Event;
 use crate::state::AppState;
@@ -79,12 +79,7 @@ fn one_line_summary(ev: &Event) -> String {
     let mut compact = String::with_capacity(raw.len());
     let mut last_space = false;
     for c in raw.chars() {
-        if c == '\n' || c == '\t' {
-            if !last_space {
-                compact.push(' ');
-                last_space = true;
-            }
-        } else if c == ' ' {
+        if c == '\n' || c == '\t' || c == ' ' {
             if !last_space {
                 compact.push(' ');
                 last_space = true;
@@ -142,9 +137,15 @@ fn render_status_bar(frame: &mut Frame, area: Rect, app: &AppState) {
     };
 
     let toggle_hint = if app.paused {
-        Span::styled("\u{25B6} Play (p)", Style::default().fg(theme::STATUS_HEALTHY))
+        Span::styled(
+            "\u{25B6} Play (p)",
+            Style::default().fg(theme::STATUS_HEALTHY),
+        )
     } else {
-        Span::styled("\u{23F8} Pause (p)", Style::default().fg(theme::STATUS_WARNING))
+        Span::styled(
+            "\u{23F8} Pause (p)",
+            Style::default().fg(theme::STATUS_WARNING),
+        )
     };
 
     let line = Line::from(vec![
@@ -241,8 +242,7 @@ fn render_timeline(frame: &mut Frame, area: Rect, app: &AppState) {
             Row::new(vec![
                 Cell::from(fmt_relative(rel)).style(Style::default().fg(theme::TEXT_DIM)),
                 Cell::from(source).style(Style::default().fg(source_color)),
-                Cell::from(ev.type_tag().to_string())
-                    .style(Style::default().fg(theme::ACCENT)),
+                Cell::from(ev.type_tag().to_string()).style(Style::default().fg(theme::ACCENT)),
                 Cell::from("\u{25CF}").style(Style::default().fg(dot_color)),
                 Cell::from(msg).style(Style::default().fg(theme::TEXT_PRIMARY)),
             ])

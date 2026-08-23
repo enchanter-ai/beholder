@@ -94,9 +94,9 @@ fn wide(area: Rect) -> OverviewLayout {
             Constraint::Length(3),  // top bar (bordered box)
             Constraint::Length(7), // active session (5 content rows + 2 borders) — 3-column sub-box layout
             Constraint::Length(12), // metrics row (border + max-of-three: 10 content rows)
-            Constraint::Length(3),  // phase pipeline (bordered box)
-            Constraint::Min(8),     // plugins
-            Constraint::Min(8),     // events
+            Constraint::Length(3), // phase pipeline (bordered box)
+            Constraint::Min(8),    // plugins
+            Constraint::Min(8),    // events
         ])
         .split(area);
 
@@ -174,9 +174,9 @@ fn narrow(area: Rect) -> OverviewLayout {
             Constraint::Length(12), // session metrics (10 rows stacked + 2 borders)
             Constraint::Length(11), // runtime metrics (9 rows + 2 borders)
             Constraint::Length(12), // system health (10 rows + 2 borders)
-            Constraint::Length(3),  // phase pipeline
-            Constraint::Min(6),     // plugins
-            Constraint::Min(6),     // events
+            Constraint::Length(3), // phase pipeline
+            Constraint::Min(6),    // plugins
+            Constraint::Min(6),    // events
         ])
         .split(area);
 

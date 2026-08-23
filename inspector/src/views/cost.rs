@@ -3,11 +3,11 @@
 //! Surfaces session spend, daily budget, lifetime spend, per-plugin token /
 //! cost breakdown, and the recent ledger tail. Read-only over `AppState`.
 
-use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Cell, Gauge, Paragraph, Row, Table};
+use ratatui::Frame;
 
 use crate::event::Event;
 use crate::state::AppState;
@@ -108,7 +108,14 @@ fn render_top_cards(frame: &mut Frame, area: Rect, app: &AppState) {
     } else {
         theme::STATUS_HEALTHY
     };
-    widgets::render_metric_card(frame, cols[2], "Daily Budget", &daily_value, None, daily_color);
+    widgets::render_metric_card(
+        frame,
+        cols[2],
+        "Daily Budget",
+        &daily_value,
+        None,
+        daily_color,
+    );
 
     let lifetime_value = fmt_usd(app.runtime_metrics.total_spend_lifetime_usd);
     widgets::render_metric_card(
@@ -164,8 +171,7 @@ fn render_gauges(frame: &mut Frame, area: Rect, app: &AppState) {
     } else {
         1
     };
-    let ctx_ratio =
-        (app.budgets.context_tokens as f64 / ctx_limit as f64).clamp(0.0, 1.0);
+    let ctx_ratio = (app.budgets.context_tokens as f64 / ctx_limit as f64).clamp(0.0, 1.0);
     let ctx_label = format!(
         "Context {} tok / {} tok",
         fmt_count(app.budgets.context_tokens),
@@ -196,7 +202,10 @@ fn render_plugin_breakdown(frame: &mut Frame, area: Rect, app: &AppState) {
     let mut agg: std::collections::HashMap<String, (f64, u64, u64, u64)> =
         std::collections::HashMap::new();
     for ev in &app.events {
-        if let Event::PechLedger { payload, plugin, .. } = ev {
+        if let Event::PechLedger {
+            payload, plugin, ..
+        } = ev
+        {
             let key = plugin.clone().unwrap_or_else(|| "—".to_string());
             let entry = agg.entry(key).or_insert((0.0, 0, 0, 0));
             entry.0 += payload.cost_usd;
