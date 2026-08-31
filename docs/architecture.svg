@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 470" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
+  <defs>
+    <marker id="ah" markerWidth="10" markerHeight="8" refX="7" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#9cc4ff"/>
+    </marker>
+    <marker id="ah2" markerWidth="10" markerHeight="8" refX="1" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M8,0 L0,3 L8,6 Z" fill="#9cc4ff"/>
+    </marker>
+    <marker id="ahr" markerWidth="10" markerHeight="8" refX="7" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#e58a8a"/>
+    </marker>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40,0 H0 V40" fill="none" stroke="#163457" stroke-width="1" opacity="0.55"/>
+    </pattern>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="470" rx="10" fill="#0b1e39"/>
+  <rect x="0" y="0" width="1200" height="470" rx="10" fill="url(#grid)"/>
+  <rect x="1" y="1" width="1198" height="468" rx="10" fill="none" stroke="#2b4d75" stroke-width="2"/>
+
+  <!-- title -->
+  <text x="34" y="46" fill="#e6f0ff" font-size="16">Beholder</text>
+  <text x="34" y="66" fill="#8fb3e0" font-size="11">every MCP tool call &#183; arbitrated through one 7-phase lifecycle, gated by one shared veto</text>
+
+  <!-- runtime boundary -->
+  <rect x="224" y="96" width="596" height="344" rx="10" fill="#0e2a4d" stroke="#6f8fbf" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="238" y="120" fill="#8fb3e0" font-size="11">Beholder runtime &#183; in-process</text>
+
+  <!-- entry boxes -->
+  <g stroke="#9cc4ff" stroke-width="2" fill="#12335a">
+    <rect x="28"  y="150" width="168" height="56" rx="7"/>
+    <rect x="28"  y="300" width="168" height="56" rx="7"/>
+    <rect x="248" y="150" width="200" height="62" rx="7"/>
+    <rect x="248" y="336" width="320" height="64" rx="7"/>
+  </g>
+
+  <!-- event bus (pill) -->
+  <rect x="248" y="250" width="200" height="46" rx="23" stroke="#9cc4ff" stroke-width="2" fill="#12335a"/>
+
+  <!-- hydra veto (highlighted) -->
+  <rect x="560" y="150" width="180" height="74" rx="7" stroke="#9cc4ff" stroke-width="2.5" fill="#0f3f52"/>
+
+  <!-- MCP server (cylinder) -->
+  <g stroke="#9cc4ff" stroke-width="2" fill="#0f3f52">
+    <path d="M904,150 V190 A60,9 0 0 0 1024,190 V150"/>
+    <ellipse cx="964" cy="150" rx="60" ry="9"/>
+  </g>
+
+  <!-- BLOCK (danger accent) -->
+  <rect x="862" y="278" width="272" height="54" rx="7" stroke="#e58a8a" stroke-width="2" fill="#3d1e2e"/>
+
+  <!-- inspector -->
+  <rect x="862" y="352" width="290" height="60" rx="7" stroke="#9cc4ff" stroke-width="2" fill="#12335a"/>
+
+  <!-- node labels -->
+  <g fill="#e6f0ff" font-size="14" text-anchor="middle">
+    <text x="112" y="176">your app</text>
+    <text x="112" y="326">Claude Code</text>
+    <text x="348" y="176">7-phase orchestrator</text>
+    <text x="348" y="279">event bus</text>
+    <text x="650" y="184">hydra veto core</text>
+    <text x="408" y="362">9 plugins</text>
+    <text x="964" y="170">MCP server</text>
+    <text x="998" y="300">BLOCK</text>
+    <text x="1007" y="378">Rust inspector</text>
+  </g>
+  <g font-size="10" text-anchor="middle">
+    <text x="112" y="192" fill="#8fb3e0">McpClient &#183; SDK</text>
+    <text x="112" y="342" fill="#8fb3e0">PreToolUse hook</text>
+    <text x="348" y="194" fill="#8fb3e0">anchor &#8594; &#8230; &#8594; cross-session</text>
+    <text x="650" y="202" fill="#8fb3e0">shared &#183; CVE-anchored</text>
+    <text x="408" y="380" fill="#8fb3e0">crow &#183; djinn &#183; emu &#183; gorgon &#183; hydra</text>
+    <text x="408" y="393" fill="#8fb3e0">lich &#183; naga &#183; pech &#183; sylph</text>
+    <text x="964" y="184" fill="#8fb3e0">stdio / HTTP</text>
+    <text x="998" y="316" fill="#e9b8b8">SecurityVetoError &#183; deny</text>
+    <text x="1007" y="394" fill="#8fb3e0">10 live views</text>
+  </g>
+
+  <!-- edges -->
+  <g fill="none" stroke="#9cc4ff" stroke-width="2">
+    <path d="M196,178 H248" marker-end="url(#ah)"/>
+    <path d="M448,182 H560" marker-end="url(#ah)"/>
+    <path d="M196,328 H650 V224" marker-end="url(#ah)"/>
+    <path d="M348,212 V250" marker-start="url(#ah2)" marker-end="url(#ah)"/>
+    <path d="M348,296 V336" marker-start="url(#ah2)" marker-end="url(#ah)"/>
+    <path d="M740,172 H904" marker-end="url(#ah)"/>
+    <path d="M448,273 H808 V382 H862" marker-end="url(#ah)"/>
+  </g>
+  <g fill="none" stroke="#e58a8a" stroke-width="2">
+    <path d="M740,205 H846 V305 H862" marker-end="url(#ahr)"/>
+  </g>
+
+  <!-- edge labels -->
+  <g font-size="10" text-anchor="middle">
+    <text x="504" y="176" fill="#8fb3e0">trust-gate</text>
+    <text x="316" y="320" fill="#8fb3e0">hook path</text>
+    <text x="372" y="236" fill="#8fb3e0">events</text>
+    <text x="392" y="322" fill="#8fb3e0">findings</text>
+    <text x="822" y="164" fill="#8fb3e0">clear</text>
+    <text x="800" y="230" fill="#e58a8a">critical hit</text>
+    <text x="612" y="266" fill="#8fb3e0">JSONL bridge</text>
+  </g>
+</svg>

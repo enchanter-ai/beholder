@@ -195,26 +195,9 @@ A thin per-request orchestrator owns the canonical request lifecycle. An in-proc
 
 Observability is the Rust terminal cockpit at [`inspector/`](inspector/) — a single binary that reads the runtime's JSONL event stream from stdin / file / socket and renders 10 live views (overview, plugins, events, security, cost, drift, codebase, replay, runtime totals, active tasks). The wire contract is documented at [`docs/event-schema.md`](docs/event-schema.md).
 
-```mermaid
-flowchart TD
-    SDK["Your app → McpClient (SDK)"] --> ORCH
-    HOOK["Claude Code → PreToolUse hook"] --> VETO
-
-    subgraph rt["Beholder runtime (in-process)"]
-        ORCH["7-phase orchestrator<br/>anchor → trust-gate → pre-dispatch →<br/>dispatch → post-response → post-session → cross-session"]
-        VETO{"hydra veto core<br/>shared · CVE-anchored"}
-        BUS(("event bus"))
-        PLUGINS["9 plugins<br/>crow · djinn · emu · gorgon · hydra<br/>lich · naga · pech · sylph"]
-
-        ORCH -->|trust-gate| VETO
-        ORCH <-->|derived events| BUS
-        BUS <--> PLUGINS
-    end
-
-    VETO -->|critical hit| BLOCK["BLOCK — SecurityVetoError / permissionDecision: deny"]
-    VETO -->|clear| SRV[("MCP server — stdio / HTTP")]
-    BUS -->|JSONL bridge| INSP["Rust inspector — 10 live views"]
-```
+<p align="center">
+  <img src="docs/architecture.svg" width="940" alt="Beholder architecture — the SDK and the Claude Code hook both reach the shared hydra veto through a 7-phase orchestrator and an in-process event bus; a critical hit blocks, a clear call dispatches to the MCP server, and the bus streams JSONL to the Rust inspector">
+</p>
 
 ## Streaming events to the inspector
 
