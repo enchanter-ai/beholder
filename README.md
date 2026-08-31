@@ -2,6 +2,11 @@
 
 [![CI](https://github.com/enchanter-ai/beholder/actions/workflows/ci.yml/badge.svg)](https://github.com/enchanter-ai/beholder/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.6.0-blue.svg)](CHANGELOG.md)
+[![Node](https://img.shields.io/badge/node-22%2B-339933?logo=node.js&logoColor=white)](package.json)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
+[![Rust](https://img.shields.io/badge/inspector-Rust-CE422B?logo=rust&logoColor=white)](inspector/)
+[![Threat model](https://img.shields.io/badge/MCP-threat_model-8A2BE2.svg)](docs/mcp-threat-model.md)
 
 <p align="center">
   <a href="inspector/">
