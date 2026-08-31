@@ -20,14 +20,14 @@ the npm registry. Only the `packages/*` plugins publish.
 ### 1. Bump versions
 
 ```bash
-npm run release:prep -- --version 0.4.0
+npm run release:prep -- --version 0.6.0
 ```
 
 This rewrites:
 
-- `package.json` (root) `version` -> `0.4.0`
-- `packages/*/package.json` `version` -> `0.4.0`
-- `packages/*/package.json` `peerDependencies.beholder` -> `^0.4.0`
+- `package.json` (root) `version` -> `0.6.0`
+- `packages/*/package.json` `version` -> `0.6.0`
+- `packages/*/package.json` `peerDependencies.beholder` -> `^0.6.0`
 
 It prints a summary of every field touched and exits 0. Inspect the diff
 before committing.
@@ -47,8 +47,8 @@ If validation or pack-checks fail, fix the offending package and re-run.
 ### 3. Commit + tag + push
 
 ```bash
-git commit -am "chore: bump to v0.4.0"
-git tag v0.4.0
+git commit -am "chore: bump to v0.6.0"
+git tag v0.6.0
 git push origin main --tags
 ```
 
@@ -76,7 +76,7 @@ skipped — npm refuses to overwrite a published version.
 To finish the release:
 
 - Fix the root cause for the failing packages (manifest issue, network).
-- Re-run the workflow with `gh workflow run publish.yml --ref v0.4.0`, or
+- Re-run the workflow with `gh workflow run publish.yml --ref v0.6.0`, or
   delete the tag, fix locally, retag, and re-push.
 - Alternatively, publish the remaining packages manually:
   ```bash
@@ -95,6 +95,6 @@ installs.
 
 `release-prep.ts` retightens the range to `^<root-version>` on each bump so
 the published manifests express a clean semver-major compatibility statement.
-If `beholder` itself remains `private: true` for v0.4 and beyond, the
+If `beholder` itself remains `private: true` for v0.6 and beyond, the
 practical effect is informational; if it eventually publishes, the range is
 already correct.
