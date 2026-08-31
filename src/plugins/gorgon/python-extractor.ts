@@ -1,4 +1,4 @@
-/* enchanter/src/plugins/gorgon/python-extractor.ts — Python regex-AST
+/* beholder/src/plugins/gorgon/python-extractor.ts — Python regex-AST
    extractor for the gorgon adapter (v0.3.1, see
    docs/v0.3/gorgon-tarjan-python-ast.md).
 

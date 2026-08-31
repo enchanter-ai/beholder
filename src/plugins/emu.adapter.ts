@@ -1,4 +1,4 @@
-/* enchanter/src/plugins/emu.adapter.ts — implements architecture-spec
+/* beholder/src/plugins/emu.adapter.ts — implements architecture-spec
    phase_1.emu (token economy monitoring + runway forecast with named drift
    patterns). Source: plugins/emu/README.md §§ A1 Markov Drift Detection,
    A2 Linear Runway Forecasting. v0.2 replaces the v0.1 stub. */

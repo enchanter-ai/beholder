@@ -1,4 +1,4 @@
-/* enchanter/src/plugins/gorgon/tarjan.ts — implements G1 Tarjan SCC for the
+/* beholder/src/plugins/gorgon/tarjan.ts — implements G1 Tarjan SCC for the
    gorgon adapter (v0.3.1, see docs/v0.3/gorgon-tarjan-python-ast.md).
 
    Iterative Tarjan to handle deep graphs without blowing the JS call stack.

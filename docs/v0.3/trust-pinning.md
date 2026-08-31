@@ -48,7 +48,7 @@ The diff display is a human-in-the-loop affordance — *what* changed (binary di
 
 1. **Binary digest scope.** stdio binary may be a wrapper script that imports the real implementation. Pin the wrapper (path-stable) or the resolved binary (impl-stable)? Default: pin the wrapper (what's actually invoked) and document the limitation.
 2. **Env value sensitivity.** We hash env *names* not *values* — values change legitimately (rotation, secrets reload). But a name appearing or disappearing IS security-relevant.
-3. **Re-consent UX.** CLI command (`enchanter trust-pin approve <server>`) vs. interactive prompt at orchestrator-registration time.
+3. **Re-consent UX.** CLI command (`beholder trust-pin approve <server>`) vs. interactive prompt at orchestrator-registration time.
 4. **Persistence format.** JSONL append-only mirrors replay-store; alternative is a snapshot JSON. Pin count is small (one entry per server) → snapshot JSON simpler. Recommend snapshot JSON.
 
 ## API surface (stubbed today)

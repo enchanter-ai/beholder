@@ -1,5 +1,5 @@
 /* src/observability/schema.ts — minimal JSON Schema validator for the
- * Enchanter event-bus wire format.
+ * Beholder event-bus wire format.
  *
  * Loads docs/event-schema.json at module init and exposes:
  *   - validate(event):    inbound event (Bridge.enqueue → JSONL line)

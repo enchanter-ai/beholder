@@ -1,4 +1,4 @@
-/* src/observability/bridge-config.ts — parse the ENCHANTER_BRIDGE env var
+/* src/observability/bridge-config.ts — parse the BEHOLDER_BRIDGE env var
  * into a BridgeSink. The runtime calls parseBridgeEnv() once at startup
  * and, if the result is not 'off', constructs the matching sink via
  * makeSinkFromEnv() and hands it to a Bridge.
@@ -28,7 +28,7 @@ const EXAMPLES =
   "examples: 'stdout', 'tcp://127.0.0.1:7878', 'file:///abs/log.jsonl', 'file:./relative.jsonl'";
 
 function fail(value: string): never {
-  throw new Error(`invalid ENCHANTER_BRIDGE: ${value} — ${EXAMPLES}`);
+  throw new Error(`invalid BEHOLDER_BRIDGE: ${value} — ${EXAMPLES}`);
 }
 
 export function parseBridgeEnv(value: string | undefined): BridgeEnvSpec {

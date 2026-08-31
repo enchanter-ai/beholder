@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /* scripts/release-prep.ts — bumps the root + every packages/* manifest to a
-   new semver in lockstep, and updates each package's peerDependencies.enchanter
+   new semver in lockstep, and updates each package's peerDependencies.beholder
    to ^<new-version>.
 
    Usage:
@@ -81,17 +81,17 @@ export function applyVersionBump(
       manifest.version = newVersion;
     }
 
-    const currentPeer = manifest.peerDependencies?.enchanter;
+    const currentPeer = manifest.peerDependencies?.beholder;
     if (currentPeer !== peerRange) {
       changes.push({
         file: rel,
-        field: 'peerDependencies.enchanter',
+        field: 'peerDependencies.beholder',
         before: currentPeer ?? '(unset)',
         after: peerRange,
       });
       manifest.peerDependencies = {
         ...(manifest.peerDependencies ?? {}),
-        enchanter: peerRange,
+        beholder: peerRange,
       };
     }
 

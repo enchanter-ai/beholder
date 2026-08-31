@@ -83,7 +83,7 @@ describe('runSandboxedToolCallLive — runMode:worker (fork + stdio fixture)', (
       'weather',
       {},
       {},
-      { kind: 'stdio', cmd: '/no/such/binary-xyz-enchanter-test', args: [] },
+      { kind: 'stdio', cmd: '/no/such/binary-xyz-beholder-test', args: [] },
       { runMode: 'worker', time_budget_ms: 2000 },
     );
     expect(result.failed).toBe(true);

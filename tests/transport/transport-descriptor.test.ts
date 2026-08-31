@@ -23,7 +23,7 @@ import {
 let tmpDir: string;
 
 beforeEach(() => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'enchanter-tdesc-'));
+  tmpDir = mkdtempSync(join(tmpdir(), 'beholder-tdesc-'));
   _clearBinaryDigestCacheForTests();
 });
 

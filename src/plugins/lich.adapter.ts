@@ -1,4 +1,4 @@
-/* enchanter/src/plugins/lich.adapter.ts — v0.2 implementation.
+/* beholder/src/plugins/lich.adapter.ts — v0.2 implementation.
    Refs: architecture-spec phase_4.failure_mode_2 + plugins/lich source (M1/M6).
    Primary owner of failure-mode 2 (tool poisoning). M5 sandbox deferred.
    M1 static suspicion: scans tool_schema descriptions, parameter names, and
@@ -144,7 +144,7 @@ function scanSchema(schema: ToolSchema): SuspicionMatch[] {
     matches.push(...scanText(schema.description, 'description'));
   }
 
-  // Scan parameter descriptions from both conventions Enchanter uses.
+  // Scan parameter descriptions from both conventions Beholder uses.
   const props: Record<string, unknown> =
     (schema.parameters as Record<string, unknown> | undefined) ??
     schema.inputSchema?.properties ??

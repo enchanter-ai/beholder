@@ -1,4 +1,4 @@
-//! Wire-format event types for the Enchanter inspector.
+//! Wire-format event types for the Beholder inspector.
 //!
 //! Events arrive as JSONL over a socket or stdin. The discriminator lives on
 //! the `type` field (e.g. `runtime.metrics`, `tool.call`). Variants we have

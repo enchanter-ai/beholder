@@ -1,4 +1,4 @@
-/* enchanter/src/oauth/replay-store.ts — implements v0.3 follow-up #1 OAuth
+/* beholder/src/oauth/replay-store.ts — implements v0.3 follow-up #1 OAuth
    replay defense (per IMPLEMENTATION_SUMMARY.md §v0.3 + README §v0.3 roadmap).
 
    ReplayStore contract:

@@ -72,9 +72,9 @@ async function scenario(
 }
 
 async function main(): Promise<void> {
-  console.log(`\n${A.bold}${DOUBLE}\n  Enchanter Plugin Stress Test\n${DOUBLE}${A.reset}\n`);
+  console.log(`\n${A.bold}${DOUBLE}\n  Beholder Plugin Stress Test\n${DOUBLE}${A.reset}\n`);
 
-  const sandbox = join(tmpdir(), `enchanter-stress-${Date.now()}`);
+  const sandbox = join(tmpdir(), `beholder-stress-${Date.now()}`);
   mkdirSync(sandbox, { recursive: true });
   const secretFile = join(sandbox, 'secrets.txt');
   writeFileSync(secretFile, [

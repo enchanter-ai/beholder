@@ -14,7 +14,7 @@ use std::io::Write as _;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use enchanter_inspector::transport::{Source, Transport};
+use beholder_inspector::transport::{Source, Transport};
 use tokio::time::timeout;
 
 /// Best-effort cleanup of a tempfile (and a numbered rotated sibling) on
@@ -44,7 +44,7 @@ fn unique_tmp_path(label: &str) -> PathBuf {
         .map(|d| d.as_nanos())
         .unwrap_or(0);
     std::env::temp_dir().join(format!(
-        "enchanter_inspector_tail_{}_{}_{}.jsonl",
+        "beholder_inspector_tail_{}_{}_{}.jsonl",
         label, pid, nanos
     ))
 }

@@ -1,4 +1,4 @@
-//! enchanter-inspector — terminal cockpit for the Enchanter AI runtime.
+//! beholder-inspector — terminal cockpit for the Beholder AI runtime.
 //!
 //! Module ownership:
 //! - `event`     — wire types for the JSONL event stream (owned elsewhere)
@@ -26,7 +26,7 @@ use clap::{Args, Parser, Subcommand};
 #[derive(Debug, Clone)]
 pub enum Source {
     /// Read newline-delimited JSON from stdin (default; pairs with
-    /// `enchanter-runtime | enchanter-inspector`).
+    /// `beholder-runtime | beholder-inspector`).
     Stdin,
     /// Replay a previously captured JSONL file.
     File(PathBuf),
@@ -39,7 +39,7 @@ pub enum Source {
     /// remains the default for back-compatibility.
     SocketControl(String),
     /// v0.5+ — spawn an arbitrary command and consume its stdout as JSONL.
-    /// Usage: `enchanter inspect --exec "npx tsx scripts/demo-live.ts"`.
+    /// Usage: `beholder inspect --exec "npx tsx scripts/demo-live.ts"`.
     /// Closes the producer↔consumer loop in one command without an external
     /// shell pipe.
     Exec(String),
@@ -57,9 +57,9 @@ pub struct Config {
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "enchanter",
+    name = "beholder",
     version,
-    about = "Terminal cockpit for the Enchanter AI runtime",
+    about = "Terminal cockpit for the Beholder AI runtime",
     long_about = "Terminal is the cockpit. Web/Electron is the studio."
 )]
 struct Cli {
@@ -73,8 +73,8 @@ enum Command {
     Inspect(InspectArgs),
     /// One-command live session: spawns the Node-side runtime
     /// (`scripts/live.ts`) and pipes its bus events straight into the cockpit.
-    /// Equivalent to `enchanter inspect --exec "npx tsx scripts/live.ts"`.
-    /// Run from the `client/enchanter/` directory so the script path resolves.
+    /// Equivalent to `beholder inspect --exec "npx tsx scripts/live.ts"`.
+    /// Run from the `client/beholder/` directory so the script path resolves.
     Live(LiveArgs),
 }
 
@@ -87,13 +87,13 @@ struct LiveArgs {
 
 impl LiveArgs {
     fn into_config(self) -> Config {
-        // Set ENCHANTER_BRIDGE inline so the spawned child uses stdout sink
+        // Set BEHOLDER_BRIDGE inline so the spawned child uses stdout sink
         // for its bus events. Syntax differs per shell — `cmd /c` and `sh -c`
         // both accept their respective inline-env idioms.
         let cmd = if cfg!(windows) {
-            format!("set ENCHANTER_BRIDGE=stdout&& npx tsx {}", self.script)
+            format!("set BEHOLDER_BRIDGE=stdout&& npx tsx {}", self.script)
         } else {
-            format!("ENCHANTER_BRIDGE=stdout npx tsx {}", self.script)
+            format!("BEHOLDER_BRIDGE=stdout npx tsx {}", self.script)
         };
         Config {
             source: Source::Exec(cmd),
@@ -119,7 +119,7 @@ struct InspectArgs {
 
     /// Spawn the given shell command and consume its stdout as JSONL events.
     /// Closes the producer↔consumer loop in one command — no external pipe.
-    /// Example: `enchanter inspect --exec "npx tsx scripts/demo-live.ts"`.
+    /// Example: `beholder inspect --exec "npx tsx scripts/demo-live.ts"`.
     #[arg(long, value_name = "CMD", conflicts_with_all = ["from", "socket", "control_socket"])]
     exec: Option<String>,
 
@@ -154,17 +154,17 @@ impl InspectArgs {
 
 /// Resolve the path the Claude Code hook emitter writes to. Mirrors the
 /// algorithm in `scripts/hooks/claude-code-emit.mjs::cachePath` —
-/// XDG_CACHE_HOME → LOCALAPPDATA → HOME/.cache, all under `enchanter/`.
+/// XDG_CACHE_HOME → LOCALAPPDATA → HOME/.cache, all under `beholder/`.
 fn claude_code_hook_jsonl() -> PathBuf {
     let base = std::env::var_os("XDG_CACHE_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("LOCALAPPDATA").map(PathBuf::from))
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))
         .unwrap_or_else(std::env::temp_dir);
-    base.join("enchanter").join("claude-code.jsonl")
+    base.join("beholder").join("claude-code.jsonl")
 }
 
-/// Decide what bare `enchanter` (no subcommand) should do.
+/// Decide what bare `beholder` (no subcommand) should do.
 ///
 /// Hierarchy, highest priority first:
 /// 1. stdin is piped → consume JSONL from stdin.
@@ -175,18 +175,18 @@ fn claude_code_hook_jsonl() -> PathBuf {
 /// 3. stdin is a TTY AND no hooks installed → print a clear message naming
 ///    three options and exit 0. We deliberately do NOT fall through to a
 ///    synthetic showcase loop — confusing real-vs-synthetic data is worse
-///    than not opening the cockpit. `enchanter live` and `enchanter inspect`
+///    than not opening the cockpit. `beholder live` and `beholder inspect`
 ///    remain explicit opt-ins for advanced users (monorepo dev / pipe mode).
 ///
 /// Note: `src/demo.rs` is now legacy fallback only — the synthetic emitter
-/// is no longer wired by default. It still triggers if `enchanter inspect`
-/// runs and stdin is a TTY (an unusual user setup) but bare `enchanter`
+/// is no longer wired by default. It still triggers if `beholder inspect`
+/// runs and stdin is a TTY (an unusual user setup) but bare `beholder`
 /// no longer routes there.
 fn default_command() -> Command {
     use std::io::IsTerminal;
     let stdin_tty = std::io::stdin().is_terminal();
     if !stdin_tty {
-        eprintln!("[enchanter] stdin is not a TTY → reading JSONL from stdin (pipe mode)");
+        eprintln!("[beholder] stdin is not a TTY → reading JSONL from stdin (pipe mode)");
         return Command::Inspect(InspectArgs::default());
     }
 
@@ -199,7 +199,7 @@ fn default_command() -> Command {
     let parent_exists = hook_jsonl.parent().map(|p| p.is_dir()).unwrap_or(false);
     let hooks_wired_up = exists || parent_exists;
     eprintln!(
-        "[enchanter] checking hooks: path={} exists={} parent_dir={} → {}",
+        "[beholder] checking hooks: path={} exists={} parent_dir={} → {}",
         hook_jsonl.display(),
         exists,
         parent_exists,
@@ -219,13 +219,13 @@ fn default_command() -> Command {
     // No hooks → print guidance and exit. Better than launching a synthetic
     // demo and confusing the user about real-vs-fake data.
     eprintln!(
-        "[enchanter] No Claude Code hooks installed. Three options:\n  \
+        "[beholder] No Claude Code hooks installed. Three options:\n  \
          1. Install hooks (recommended for real usage):\n     \
-         cd <enchanter-dir> && node scripts/hooks/install-hooks.mjs\n  \
+         cd <beholder-dir> && node scripts/hooks/install-hooks.mjs\n  \
          2. Pipe events manually:\n     \
-         <runtime> | enchanter\n  \
+         <runtime> | beholder\n  \
          3. Replay a captured JSONL:\n     \
-         enchanter inspect --from <file.jsonl>"
+         beholder inspect --from <file.jsonl>"
     );
     std::process::exit(0);
 }

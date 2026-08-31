@@ -1,22 +1,22 @@
 # @enchanter-ai/plugin-crow
 
-Bayesian trust scoring + info-gain review ordering — the **Crow** adapter for [Enchanter](https://github.com/enchanter-ai/enchanter).
+Bayesian trust scoring + info-gain review ordering — the **Crow** adapter for [Beholder](https://github.com/enchanter-ai/beholder).
 
 Crow maintains a Beta posterior per source / tool / pattern, scores trust as the posterior mean, and orders pending reviews by expected information gain (entropy reduction).
 
 ## Install
 
 ```bash
-npm install enchanter @enchanter-ai/plugin-crow
+npm install beholder @enchanter-ai/plugin-crow
 ```
 
-`enchanter` is a peer dependency.
+`beholder` is a peer dependency.
 
 ## Usage
 
 ```ts
 import { crowAdapter } from '@enchanter-ai/plugin-crow';
-import { McpClient } from 'enchanter';
+import { McpClient } from 'beholder';
 
 const client = new McpClient({
   // ...transport, server config...
@@ -24,7 +24,7 @@ const client = new McpClient({
 });
 ```
 
-See the root [Enchanter README](https://github.com/enchanter-ai/enchanter#readme) for the full lifecycle and plugin contract.
+See the root [Beholder README](https://github.com/enchanter-ai/beholder#readme) for the full lifecycle and plugin contract.
 
 ## License
 

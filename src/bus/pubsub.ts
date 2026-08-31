@@ -1,4 +1,4 @@
-/* enchanter/src/bus/pubsub.ts — implements architecture-spec
+/* beholder/src/bus/pubsub.ts — implements architecture-spec
    phase_2 (event bus side of hybrid coordination) + phase_6.observability
    (event-stream tap). In-process pub-sub with bounded ring-buffer event store.
    Counter: external bus (NATS, Redis Streams) gives durability + multi-process

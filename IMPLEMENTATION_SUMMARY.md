@@ -1,4 +1,4 @@
-# Enchanter v0.2 — Implementation Summary
+# Beholder v0.2 — Implementation Summary
 
 **Generated:** 2026-04-27
 **Architecture spec:** `wixie/prompts/mcp-client-golden-architecture/output-opus-4-7.json`
@@ -170,7 +170,7 @@ Removed files:
 ## Run
 
 ```bash
-cd client/enchanter
+cd client/beholder
 npm install
 npm run typecheck
 npm test

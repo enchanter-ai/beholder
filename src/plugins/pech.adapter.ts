@@ -1,4 +1,4 @@
-/* enchanter/src/plugins/pech.adapter.ts — v0.3 implementation.
+/* beholder/src/plugins/pech.adapter.ts — v0.3 implementation.
    Cites: architecture-spec phase_5.budget_thresholds + plugins/pech source
    (README.md §Engine L2: Budget Boundary Detection, §The Full Lifecycle).
 

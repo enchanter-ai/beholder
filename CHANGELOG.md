@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Enchanter are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+All notable changes to Beholder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.5.0] — 2026-05-06
 
@@ -34,7 +34,7 @@ Carry-overs from the v0.3.0 ship list, all landed in one cycle. Test count: 270 
 - **Trust-pin digest expansion** (`src/transport/transport-descriptor.ts`) — `TransportDescriptor` carries `cmd / args / binaryDigest / envAllowlist` (stdio) or `url` (http). `describeStdio` resolves the binary via PATH walk and SHA-256s the file (cap 64 MiB, cached). `McpClient.transportDescriptor` threads the descriptor into the trust-gate hook so all 6 `TrustPinInputs` fields contribute to the digest. `binaryDigest` is best-effort: missing / unreadable files don't fail closed, just omit the field via canonical-JSON omission.
 - **Djinn D2 HMM persistence** (`src/plugins/djinn/hmm-store.ts`) — `InMemoryHmmStore` (default) and `PersistentHmmStore` (JSONL append-only, replay-on-construct, corrupt-tail tolerant). `IntentHmm.serialize` / `fromSnapshot` round-trip the forward state. Adapter wires load-on-configure, save-on-update, clear-on-anchor-clear. `hmm_store_path` config opts into persistence. Transition matrix is intentionally NOT persisted — hydrated sessions continue under whatever matrix is current at load time, with documented forward-looking note about adding a `version` field if state shape ever changes.
 - **Gorgon dotted-module resolution** (`src/plugins/gorgon/pyproject-resolver.ts`) — hand-rolled minimal TOML parser (no new deps) extracts package roots from `[tool.poetry]`, `[project]`, `[tool.setuptools]` and their `packages` / `package-dir` / `[tool.setuptools.packages.find]` variants. `resolveModule` walks `<root>/foo/bar.py` then `<root>/foo/bar/__init__.py` candidates with an injectable `FileSystemView` for testability. Roots from multiple build-system layouts are merged additively. Fail-open: invalid TOML / missing file → resolver becomes a no-op, extractor returns verbatim module names.
-- **Plugin-package release pipeline** (`scripts/publish-packages.ts`, `scripts/release-prep.ts`, `.github/workflows/publish.yml`, `docs/RELEASE.md`) — `release:prep` bumps root + all 10 plugin versions in lockstep + retightens `peerDependencies.enchanter` to `^<version>`. `publish-packages.ts --dry-run` validates package shape (name regex, version lockstep, `dist` in files, peer-range compat). `--publish` mode runs `npm publish --workspace ... --access public` per package; gated on `NPM_TOKEN`. CI workflow triggers on `v*.*.*` tags. `docs/RELEASE.md` walks the operator through bump → tag → push → CI publishes.
+- **Plugin-package release pipeline** (`scripts/publish-packages.ts`, `scripts/release-prep.ts`, `.github/workflows/publish.yml`, `docs/RELEASE.md`) — `release:prep` bumps root + all 10 plugin versions in lockstep + retightens `peerDependencies.beholder` to `^<version>`. `publish-packages.ts --dry-run` validates package shape (name regex, version lockstep, `dist` in files, peer-range compat). `--publish` mode runs `npm publish --workspace ... --access public` per package; gated on `NPM_TOKEN`. CI workflow triggers on `v*.*.*` tags. `docs/RELEASE.md` walks the operator through bump → tag → push → CI publishes.
 
 ### Changed
 - `IntentHmm` gains `serialize()` / `static fromSnapshot()` for state hydration. `IntentHmm` constructor / behavior unchanged for callers that don't persist.
@@ -50,7 +50,7 @@ Major release — full v0.3 roadmap landed across three sub-iterations (0.3.0 / 
 - **JSONL event bridge** (`src/observability/bridge.ts`) — explicit producer-side bridge from the in-process bus to a configurable sink. `StdoutSink`, `FileSink` (append-only), `TcpSink` (capped exp-backoff + 200-line buffer). Closes the implicit-protocol gap between the runtime and the Rust inspector.
 - **Wire schema** (`docs/event-schema.md`) — canonical JSONL contract: UTF-8, ≤ 1 MiB / line, type-discriminated, well-typed variants for `runtime.metrics` / `tool.call` / `hydra.veto` / `pech.ledger` / `task.updated` / `code.modified`, tolerant `GenericPayload` for all others. Severity ladder + phase enum match the inspector's Rust ground truth.
 - **File-backed pech ledger** (`src/plugins/pech/ledger-store.ts`) — opt-in JSONL append + replay-on-configure, parent-dir mkdir, `degraded:true` ack on write failure (never blocks the hot path).
-- **Rust ratatui terminal cockpit** (`inspector/`) — single `enchanter` binary, 10 live views, reads JSONL from stdin / file / TCP socket. See `inspector/CHANGELOG.md` for the inspector's own version log.
+- **Rust ratatui terminal cockpit** (`inspector/`) — single `beholder` binary, 10 live views, reads JSONL from stdin / file / TCP socket. See `inspector/CHANGELOG.md` for the inspector's own version log.
 
 ### Added — v0.3.1 (security + algorithm upgrades)
 - **TLS cert pinning** (`src/transport/tls-pin.ts`) — `computeCertFingerprint` (SHA-256 over leaf cert DER, hex), `InMemoryTlsPinStore` and `PersistentTlsPinStore`, `verifyTlsPin` with TOFU and PINNED policies. Wired into `StreamableHttpTransport` via a custom undici `Agent` connector — verification fires before any request bytes go out.
@@ -62,7 +62,7 @@ Major release — full v0.3 roadmap landed across three sub-iterations (0.3.0 / 
 ### Added — v0.3.2 (workspace + wire-ups)
 - **`@enchanter-ai/plugin-*` workspace packages** (`packages/`) — npm workspaces over the existing `src/plugins/` source. 10 publish-ready packages each with their own `package.json` / `tsconfig.json` / `README.md` / `LICENSE`. `plugin-pech` is the reference implementation (full re-export); the other nine are scaffolded thin re-export shells. `npm pack --dry-run` succeeds for all 10. Not yet on the npm registry — release ceremony deferred to v0.4.
 - **Orchestrator → trust-pin enforcement** (`src/orchestration/lifecycle.ts`, `src/client/mcp-client.ts`) — trust-gate phase invokes `enforceTrustPin` against the live request inputs; `TrustPinMismatchError` is converted to `SecurityVetoError(plugin: 'trust-pin')` so it rides the existing veto plumbing. Default-off: pass `trustPinStore` to `McpClient` to enable. v0.3.2 populates `args / url / schemaDigests`; `cmd / binaryDigest / envAllowlist` deferred to v0.4.
-- **`ENCHANTER_BRIDGE` env switch** (`scripts/run.ts`, `src/observability/bridge-config.ts`) — supervisor reads `ENCHANTER_BRIDGE` and constructs the matching sink. Accepted forms: `stdout`, `tcp://host:port`, `file:./path`, `off` (default). On stdout sink: child stdout re-routed to stderr to keep the JSONL wire uncorrupted.
+- **`BEHOLDER_BRIDGE` env switch** (`scripts/run.ts`, `src/observability/bridge-config.ts`) — supervisor reads `BEHOLDER_BRIDGE` and constructs the matching sink. Accepted forms: `stdout`, `tcp://host:port`, `file:./path`, `off` (default). On stdout sink: child stdout re-routed to stderr to keep the JSONL wire uncorrupted.
 - **Lich M5 tool-call confirmation** (`src/plugins/lich/sandbox.ts::runSandboxedToolCall`) — second sandbox variant that re-runs a tool call (currently against a deterministic mock-transport projection) and structurally diffs the result against the original response. Diff format: `{ matches, differences: [{ path, original, replayed }] }` with order-insensitive multiset comparison for arrays of primitives. Gated on `m5_tool_confirm: false`; sets `degraded:true` on sandbox failure. Real-MCP-server replay deferred to v0.4.
 
 ### Changed
@@ -118,7 +118,7 @@ Major release — full v0.3 roadmap landed across three sub-iterations (0.3.0 / 
 - Djinn D2 HMM drift detection
 - Pech file-backed ledger + L1 EMA / L3 Z-score / L4 cache-waste
 - Gorgon Tarjan SCC + Python-AST extraction
-- npm-publishable `@enchanter/plugin-*` packages
+- npm-publishable `@beholder/plugin-*` packages
 
 ## [0.2.0] — 2026-04-27
 

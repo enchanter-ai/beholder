@@ -91,7 +91,7 @@ describe('PersistentReplayStore — restart survival', () => {
   let storePath: string;
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'enchanter-replay-'));
+    tmpDir = mkdtempSync(join(tmpdir(), 'beholder-replay-'));
     storePath = join(tmpDir, 'replay.jsonl');
   });
 

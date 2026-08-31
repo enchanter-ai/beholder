@@ -1,4 +1,4 @@
-/* enchanter/src/plugins/gorgon/pyproject-resolver.ts — resolve dotted
+/* beholder/src/plugins/gorgon/pyproject-resolver.ts — resolve dotted
    Python module names to filesystem paths via a project's `pyproject.toml`.
 
    Lifts the v0.3.1 deferral noted in docs/v0.3/gorgon-tarjan-python-ast.md

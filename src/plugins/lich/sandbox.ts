@@ -1,4 +1,4 @@
-/* enchanter/src/plugins/lich/sandbox.ts — v0.3.1 #4 (M5 sandbox stub).
+/* beholder/src/plugins/lich/sandbox.ts — v0.3.1 #4 (M5 sandbox stub).
    Refs: docs/v0.3/lich-m5-sandbox.md (design), lich.adapter.ts (entry).
    Resource-bounded code-review sandbox. Forks a worker (sandbox-worker.mjs)
    over IPC, sends a code string in, reads structured findings out. The

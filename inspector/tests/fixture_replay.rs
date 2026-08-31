@@ -8,8 +8,8 @@
 
 use std::path::PathBuf;
 
-use enchanter_inspector::state::AppState;
-use enchanter_inspector::transport::{Source, Transport};
+use beholder_inspector::state::AppState;
+use beholder_inspector::transport::{Source, Transport};
 
 /// Replay the bundled demo fixture and assert the resulting state mirrors
 /// what the fixture emits in its final `runtime.metrics` event.

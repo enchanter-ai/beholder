@@ -31,7 +31,7 @@ use crate::{Config, Source};
 /// tasks, runs the select-loop until the user quits, and tears the terminal
 /// down on the way out (including on panic via `TerminalGuard::Drop`).
 pub async fn run(config: Config) -> anyhow::Result<()> {
-    tracing::info!(?config, "starting enchanter-inspector");
+    tracing::info!(?config, "starting beholder-inspector");
 
     // Stamp process start so RUNTIME's "Inspector uptime" row is honest.
     let _ = crate::state::STARTED_AT.set(std::time::Instant::now());
@@ -174,10 +174,10 @@ impl TerminalGuard {
         enable_raw_mode()?;
         let mut out = io::stdout();
         // Set the host terminal's title so the OS taskbar / tab strip shows
-        // "Enchanter Inspector" instead of the cmd.exe / wt.exe default.
+        // "Beholder Inspector" instead of the cmd.exe / wt.exe default.
         execute!(
             out,
-            SetTitle("Enchanter Inspector"),
+            SetTitle("Beholder Inspector"),
             EnterAlternateScreen,
             EnableMouseCapture
         )?;

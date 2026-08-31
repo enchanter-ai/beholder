@@ -31,7 +31,7 @@ import type { EnchantedEvent } from '../../../src/bus/event-types.js';
 let tmpDir: string;
 
 beforeEach(() => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'enchanter-hmm-versioning-'));
+  tmpDir = mkdtempSync(join(tmpdir(), 'beholder-hmm-versioning-'));
 });
 
 afterEach(() => {

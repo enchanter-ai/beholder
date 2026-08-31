@@ -1,23 +1,23 @@
-# Enchanter
+# Beholder
 
-[![CI](https://github.com/enchanter-ai/enchanter/actions/workflows/ci.yml/badge.svg)](https://github.com/enchanter-ai/enchanter/actions/workflows/ci.yml)
+[![CI](https://github.com/enchanter-ai/beholder/actions/workflows/ci.yml/badge.svg)](https://github.com/enchanter-ai/beholder/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 <p align="center">
   <a href="inspector/">
-    <img src="inspector/docs/assets/hero.png" alt="Enchanter Inspector — terminal cockpit for the Enchanter AI runtime" width="1280">
+    <img src="inspector/docs/assets/hero.png" alt="Beholder Inspector — terminal cockpit for the Beholder AI runtime" width="1280">
   </a>
 </p>
 
-Enchanter is a TypeScript MCP client SDK with a hybrid orchestrator and 10 capability plugins, plus a Rust terminal cockpit ([`inspector/`](inspector/)) for live observability. Every outbound tool call rides a 7-phase request lifecycle, runs through an in-process event bus, and lets specialized plugins (trust scoring, drift detection, security veto, code review, structural fingerprinting, cost attribution, git workflow) observe, modify, or block before the request leaves your process.
+Beholder is a TypeScript MCP client SDK with a hybrid orchestrator and 10 capability plugins, plus a Rust terminal cockpit ([`inspector/`](inspector/)) for live observability. Every outbound tool call rides a 7-phase request lifecycle, runs through an in-process event bus, and lets specialized plugins (trust scoring, drift detection, security veto, code review, structural fingerprinting, cost attribution, git workflow) observe, modify, or block before the request leaves your process.
 
 The security veto fires on **both** paths. When you drive traffic through the SDK's `McpClient` orchestrator (see Quickstart), a critical CVE-anchored hit becomes a `SecurityVetoError` and fails the request closed. And the auto-wired Claude Code integration (`postinstall` hook, below) now runs the **same** hydra veto core on `PreToolUse` and **blocks** a matching tool call via Claude Code's `permissionDecision: "deny"` contract — so the shipped default product enforces the veto, not just the SDK path. The pattern table and block/warn decision live in one shared module ([`src/plugins/hydra/veto-core.mjs`](src/plugins/hydra/veto-core.mjs)) consumed by both. Enforcement fails **open**: an internal hook error allows the call (and logs it) rather than wedging your session; only a genuine critical veto denies.
 
 ## Install
 
 > **Not published to npm.** This package is `private`, and the bare name
-> `enchanter` on the public npm registry belongs to an unrelated project — do
-> **not** run `npm install enchanter`. Build from source in this repo instead:
+> `beholder` on the public npm registry belongs to an unrelated project — do
+> **not** run `npm install beholder`. Build from source in this repo instead:
 
 ```bash
 git clone https://github.com/enchanter-ai/beholder.git
@@ -45,7 +45,7 @@ Requires Node 22+.
 ```bash
 # From this repo (not an npm package — see Install above).
 npm install && npm run build
-node ./bin/enchanter.mjs           # CLI entry (bin name: "enchanter")
+node ./bin/beholder.mjs           # CLI entry (bin name: "beholder")
 # Optional Rust cockpit:
 cd inspector && cargo build --release
 ```
@@ -58,7 +58,7 @@ import {
   StdioTransport,
   hydraAdapter,    // security veto + secret masking
   pechAdapter,     // cost ledger + budget thresholds
-} from 'enchanter';
+} from 'beholder';
 import { spawn } from 'node:child_process';
 
 // Spawn any MCP-spec server (filesystem, github, postgres, ...).
@@ -137,12 +137,12 @@ Full architectural spec: produced by [Wixie](https://github.com/enchanter-ai/wix
 
 ## Streaming events to the inspector
 
-The runtime supervisor (`scripts/run.ts`) ships every bus event as JSONL when `ENCHANTER_BRIDGE` is set. Default is off — unset env var preserves the existing WebSocket-broadcaster path. Three forms are accepted:
+The runtime supervisor (`scripts/run.ts`) ships every bus event as JSONL when `BEHOLDER_BRIDGE` is set. Default is off — unset env var preserves the existing WebSocket-broadcaster path. Three forms are accepted:
 
 ```bash
-ENCHANTER_BRIDGE=stdout npx tsx scripts/run.ts -- npm test | enchanter           # pipe directly into the Rust TUI
-ENCHANTER_BRIDGE=tcp://127.0.0.1:7878 npx tsx scripts/run.ts -- npm test         # for an inspector listening on a socket
-ENCHANTER_BRIDGE=file:./run-2026-05-05.jsonl npx tsx scripts/run.ts -- npm test  # capture-to-replay
+BEHOLDER_BRIDGE=stdout npx tsx scripts/run.ts -- npm test | beholder           # pipe directly into the Rust TUI
+BEHOLDER_BRIDGE=tcp://127.0.0.1:7878 npx tsx scripts/run.ts -- npm test         # for an inspector listening on a socket
+BEHOLDER_BRIDGE=file:./run-2026-05-05.jsonl npx tsx scripts/run.ts -- npm test  # capture-to-replay
 ```
 
 When `stdout` is selected, the supervisor re-routes the wrapped child's stdout to stderr so the JSONL wire stays uncorrupted.
@@ -153,7 +153,7 @@ If you drive your work through Claude Code, you can pipe its session lifecycle (
 
 ```bash
 node scripts/hooks/install-hooks.mjs
-enchanter inspect --tail ~/.cache/enchanter/claude-code.jsonl
+beholder inspect --tail ~/.cache/beholder/claude-code.jsonl
 ```
 
 Idempotent. Edits `~/.claude/settings.json` only. These hooks stream telemetry to the inspector **and enforce the hydra security veto** on `PreToolUse` — a critical CVE-anchored match blocks the call via Claude Code's `permissionDecision: "deny"` contract (fail-open on internal error; never blocks via a non-zero exit). See [`docs/claude-code-integration.md`](docs/claude-code-integration.md) for the full hook → wire-event mapping, the veto contract, uninstall, and privacy notes.

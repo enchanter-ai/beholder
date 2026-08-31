@@ -147,7 +147,7 @@ describe('PersistentTlsPinStore', () => {
   let storePath: string;
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'enchanter-tls-pin-'));
+    tmpDir = mkdtempSync(join(tmpdir(), 'beholder-tls-pin-'));
     storePath = join(tmpDir, 'tls-pin.jsonl');
   });
 

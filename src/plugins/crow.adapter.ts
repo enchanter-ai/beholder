@@ -1,4 +1,4 @@
-/* enchanter/src/plugins/crow.adapter.ts — implements architecture-spec phase_1.crow + plugins/crow source. */
+/* beholder/src/plugins/crow.adapter.ts — implements architecture-spec phase_1.crow + plugins/crow source. */
 
 import type { PluginAdapter } from './plugin-contract.js';
 import type { EnchantedEvent, PluginAck } from '../bus/event-types.js';

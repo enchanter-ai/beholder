@@ -1,4 +1,4 @@
-/* enchanter/src/plugins/lich/replay-cache.ts — v0.4 #1 (M5 tool-confirm-live).
+/* beholder/src/plugins/lich/replay-cache.ts — v0.4 #1 (M5 tool-confirm-live).
    Refs: docs/v0.3/lich-m5-sandbox.md § "Sandbox cache" open question.
    Per-(schema_digest, args_digest) LRU keyed cache for tool-confirm replay
    results — avoids doubling latency on every below-veto-threshold tool call.

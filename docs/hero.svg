@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 480" width="1200" height="480"
-     role="img" aria-label="Enchanter — real-time MCP observability monitor"
+     role="img" aria-label="Beholder — real-time MCP observability monitor"
      font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace"
      font-size="13">
   <defs>
@@ -79,16 +79,16 @@
     <circle cx="64" cy="40" r="6.5" fill="#ffbd2e" stroke="#dea123" stroke-width="0.5"/>
     <circle cx="84" cy="40" r="6.5" fill="#27c93f" stroke="#1aab29" stroke-width="0.5"/>
     <!-- Centered title -->
-    <text x="600" y="44" text-anchor="middle" class="titlebar-text" font-size="12">enchanter — inspector</text>
+    <text x="600" y="44" text-anchor="middle" class="titlebar-text" font-size="12">beholder — inspector</text>
   </g>
 
   <!-- ============================================================
        Inspector content (inside the window body, below title bar)
        ============================================================ -->
 
-  <!-- Header band: violet Enchanter, dim ─, blinking green LIVE, hints right -->
+  <!-- Header band: violet Beholder, dim ─, blinking green LIVE, hints right -->
   <g transform="translate(0, 30)">
-    <text x="44" y="50" class="violet" font-size="14">Enchanter</text>
+    <text x="44" y="50" class="violet" font-size="14">Beholder</text>
     <text x="124" y="50" class="label">─</text>
     <text x="142" y="50" class="green blink" font-size="14">LIVE</text>
     <text x="1156" y="50" text-anchor="end" class="label">q quit · / filter · p pause · S sort · ↑↓ scroll</text>

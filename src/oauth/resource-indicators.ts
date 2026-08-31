@@ -1,4 +1,4 @@
-/* enchanter/src/oauth/resource-indicators.ts — implements architecture-spec
+/* beholder/src/oauth/resource-indicators.ts — implements architecture-spec
    phase_3.oauth flow steps 5 + 9 (RFC 8707 Resource Indicators — clients MUST
    implement for token-audience binding). Spec citation: S6, S7, S8, S9.
    Counter: simpler scope-based audience would work for OAuth 2.0 but the MCP

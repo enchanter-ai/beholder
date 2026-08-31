@@ -1,4 +1,4 @@
-/* enchanter/src/client/mcp-client.ts — high-level glue: wires StdioTransport
+/* beholder/src/client/mcp-client.ts — high-level glue: wires StdioTransport
    (or any Transport-shaped object) + NamespaceRegistry + Orchestrator + plugin
    registry into one usable client. Owns JSON-RPC request/response correlation
    via a pending-promise map keyed by id.

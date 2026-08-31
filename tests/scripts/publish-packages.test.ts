@@ -26,12 +26,12 @@ interface MockManifest {
 }
 
 function setupFakeMonorepo(rootVersion: string): string {
-  const root = mkdtempSync(join(tmpdir(), 'enchanter-release-'));
+  const root = mkdtempSync(join(tmpdir(), 'beholder-release-'));
   writeFileSync(
     join(root, 'package.json'),
     JSON.stringify(
       {
-        name: 'enchanter',
+        name: 'beholder',
         version: rootVersion,
         private: true,
         workspaces: ['packages/*'],
@@ -54,7 +54,7 @@ function setupFakeMonorepo(rootVersion: string): string {
           name: `@enchanter-ai/plugin-${slug.replace('plugin-', '')}`,
           version: '0.3.0',
           files: ['dist', 'README.md'],
-          peerDependencies: { enchanter: '>=0.2.0' },
+          peerDependencies: { beholder: '>=0.2.0' },
         },
         null,
         2,
@@ -94,10 +94,10 @@ describe('release-prep version bump', () => {
     expect(changes.length).toBe(7);
   });
 
-  it('retightens peerDependencies.enchanter to ^<new-version>', () => {
+  it('retightens peerDependencies.beholder to ^<new-version>', () => {
     applyVersionBump(root, '0.4.0');
     const m = readManifest(join(root, 'packages/plugin-pech/package.json'));
-    expect(m.peerDependencies?.enchanter).toBe('^0.4.0');
+    expect(m.peerDependencies?.beholder).toBe('^0.4.0');
   });
 
   it('is idempotent on a second run at the same version', () => {
@@ -114,7 +114,7 @@ describe('release-prep version bump', () => {
 describe('publish-packages validation', () => {
   it('passes on a lockstep-aligned monorepo', () => {
     const issues = validateLockstep(
-      { name: 'enchanter', version: '0.4.0' },
+      { name: 'beholder', version: '0.4.0' },
       [
         {
           dir: '/tmp/x',
@@ -122,7 +122,7 @@ describe('publish-packages validation', () => {
             name: '@enchanter-ai/plugin-pech',
             version: '0.4.0',
             files: ['dist'],
-            peerDependencies: { enchanter: '^0.4.0' },
+            peerDependencies: { beholder: '^0.4.0' },
           },
         },
       ],
@@ -132,7 +132,7 @@ describe('publish-packages validation', () => {
 
   it('flags a version mismatch between root and plugin', () => {
     const issues = validateLockstep(
-      { name: 'enchanter', version: '0.4.0' },
+      { name: 'beholder', version: '0.4.0' },
       [
         {
           dir: '/tmp/x',
@@ -140,7 +140,7 @@ describe('publish-packages validation', () => {
             name: '@enchanter-ai/plugin-pech',
             version: '0.3.0',
             files: ['dist'],
-            peerDependencies: { enchanter: '^0.4.0' },
+            peerDependencies: { beholder: '^0.4.0' },
           },
         },
       ],
@@ -150,7 +150,7 @@ describe('publish-packages validation', () => {
 
   it('flags a missing dist in files', () => {
     const issues = validateLockstep(
-      { name: 'enchanter', version: '0.4.0' },
+      { name: 'beholder', version: '0.4.0' },
       [
         {
           dir: '/tmp/x',
@@ -158,7 +158,7 @@ describe('publish-packages validation', () => {
             name: '@enchanter-ai/plugin-pech',
             version: '0.4.0',
             files: ['README.md'],
-            peerDependencies: { enchanter: '^0.4.0' },
+            peerDependencies: { beholder: '^0.4.0' },
           },
         },
       ],
@@ -168,7 +168,7 @@ describe('publish-packages validation', () => {
 
   it('flags a non-@enchanter-ai/plugin-* name', () => {
     const issues = validateLockstep(
-      { name: 'enchanter', version: '0.4.0' },
+      { name: 'beholder', version: '0.4.0' },
       [
         {
           dir: '/tmp/x',
@@ -176,7 +176,7 @@ describe('publish-packages validation', () => {
             name: 'random-name',
             version: '0.4.0',
             files: ['dist'],
-            peerDependencies: { enchanter: '^0.4.0' },
+            peerDependencies: { beholder: '^0.4.0' },
           },
         },
       ],
@@ -186,7 +186,7 @@ describe('publish-packages validation', () => {
 
   it('flags a private package', () => {
     const issues = validateLockstep(
-      { name: 'enchanter', version: '0.4.0' },
+      { name: 'beholder', version: '0.4.0' },
       [
         {
           dir: '/tmp/x',
@@ -194,7 +194,7 @@ describe('publish-packages validation', () => {
             name: '@enchanter-ai/plugin-pech',
             version: '0.4.0',
             files: ['dist'],
-            peerDependencies: { enchanter: '^0.4.0' },
+            peerDependencies: { beholder: '^0.4.0' },
             private: true,
           },
         },
@@ -205,7 +205,7 @@ describe('publish-packages validation', () => {
 
   it('flags a peer range that excludes the root version', () => {
     const issues = validateLockstep(
-      { name: 'enchanter', version: '0.4.0' },
+      { name: 'beholder', version: '0.4.0' },
       [
         {
           dir: '/tmp/x',
@@ -213,12 +213,12 @@ describe('publish-packages validation', () => {
             name: '@enchanter-ai/plugin-pech',
             version: '0.4.0',
             files: ['dist'],
-            peerDependencies: { enchanter: '^0.5.0' },
+            peerDependencies: { beholder: '^0.5.0' },
           },
         },
       ],
     );
-    expect(issues.some((i) => i.field === 'peerDependencies.enchanter')).toBe(true);
+    expect(issues.some((i) => i.field === 'peerDependencies.beholder')).toBe(true);
   });
 });
 

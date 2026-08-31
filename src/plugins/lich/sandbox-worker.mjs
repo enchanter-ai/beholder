@@ -1,4 +1,4 @@
-/* enchanter/src/plugins/lich/sandbox-worker.mjs — v0.3.1 #4 (M5 sandbox stub).
+/* beholder/src/plugins/lich/sandbox-worker.mjs — v0.3.1 #4 (M5 sandbox stub).
    Forked child for runSandboxedReview. Receives a code string via IPC,
    performs a deterministic review (pattern scan over the input only),
    posts the findings back. Plain ESM .mjs so child_process.fork works

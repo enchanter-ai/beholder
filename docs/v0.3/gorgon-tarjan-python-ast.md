@@ -13,7 +13,7 @@ emits hotspot snapshots + change events. Two gaps remain:
    — a circular import (A → B → A) is invisible to hotspot ranking but is
    the single highest-impact refactor target. G1 Tarjan SCC surfaces these.
 2. **Caller-supplied graphs only.** `setGraph()` receives a pre-built
-   `Map<file, file[]>`. There is no enchanter-side extractor for any
+   `Map<file, file[]>`. There is no beholder-side extractor for any
    language; downstream tools like the inspector rely on host wiring. A
    Python AST extractor is the highest-leverage first language because the
    `gorgon` source plugin (`plugins/gorgon/shared/scripts/engines/g1_tarjan.py`)
@@ -47,7 +47,7 @@ in cross-checking.
 
 Stdlib only: `node:fs`, `node:path`. No new top-level deps. The Python AST
 extractor explicitly does NOT shell out to a Python interpreter — that
-would couple enchanter's runtime to the host having Python installed.
+would couple beholder's runtime to the host having Python installed.
 
 ## Test strategy
 

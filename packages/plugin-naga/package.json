@@ -1,22 +1,22 @@
 {
   "name": "@enchanter-ai/plugin-naga",
   "version": "0.3.0",
-  "description": "Structural replication via AST + TF-IDF + naming convention — Naga adapter for Enchanter",
+  "description": "Structural replication via AST + TF-IDF + naming convention — Naga adapter for Beholder",
   "keywords": [
-    "enchanter",
+    "beholder",
     "mcp",
     "plugin",
     "ast",
     "fingerprint"
   ],
-  "homepage": "https://github.com/enchanter-ai/enchanter#readme",
+  "homepage": "https://github.com/enchanter-ai/beholder#readme",
   "bugs": {
-    "url": "https://github.com/enchanter-ai/enchanter/issues"
+    "url": "https://github.com/enchanter-ai/beholder/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/enchanter-ai/enchanter.git",
-    "directory": "client/enchanter/packages/plugin-naga"
+    "url": "git+https://github.com/enchanter-ai/beholder.git",
+    "directory": "client/beholder/packages/plugin-naga"
   },
   "license": "Apache-2.0",
   "type": "module",
@@ -43,6 +43,6 @@
     "prepack": "npm run build"
   },
   "peerDependencies": {
-    "enchanter": ">=0.2.0"
+    "beholder": ">=0.2.0"
   }
 }

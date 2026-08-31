@@ -1,5 +1,5 @@
 /* @enchanter-ai/plugin-hydra — thin re-export shell.
-   Canonical implementation lives in the root `enchanter` package at
+   Canonical implementation lives in the root `beholder` package at
    src/plugins/hydra.adapter.ts. */
 
-export { hydraAdapter, configureHydra, maskSecrets, matchCvePatterns } from 'enchanter';
+export { hydraAdapter, configureHydra, maskSecrets, matchCvePatterns } from 'beholder';

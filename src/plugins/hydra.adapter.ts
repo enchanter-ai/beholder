@@ -1,4 +1,4 @@
-/* enchanter/src/plugins/hydra.adapter.ts — implements architecture-spec
+/* beholder/src/plugins/hydra.adapter.ts — implements architecture-spec
    phase_1.hydra (trust-gate veto + post-response secret/CVE scan) and
    phase_4 failure-modes 4 + 5 (indirect prompt injection masking +
    unbounded-resource rate hint). The reference plugin: full implementation,

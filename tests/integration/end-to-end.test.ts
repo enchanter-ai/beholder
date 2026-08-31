@@ -89,8 +89,8 @@ describe('integration: full stdio lifecycle vs mock MCP server', () => {
   it('completes initialize → tools/list → tools/call round-trip', async () => {
     const s = await spawnClient();
     try {
-      const info = await s.client.initialize('enchanter-test', '0.0.1');
-      expect(info.name).toBe('enchanter-mock');
+      const info = await s.client.initialize('beholder-test', '0.0.1');
+      expect(info.name).toBe('beholder-mock');
 
       const tools = await s.client.listTools();
       expect(tools.map((t) => t.name).sort()).toEqual(['echo', 'read_file', 'shell.exec']);
@@ -107,7 +107,7 @@ describe('integration: full stdio lifecycle vs mock MCP server', () => {
   it('hydra vetoes rm -rf / when args is a string array', async () => {
     const s = await spawnClient();
     try {
-      await s.client.initialize('enchanter-test', '0.0.1');
+      await s.client.initialize('beholder-test', '0.0.1');
       await s.client.listTools();
 
       // Pass qualified name to avoid the bare-name-with-dot edge case
@@ -124,7 +124,7 @@ describe('integration: full stdio lifecycle vs mock MCP server', () => {
   it('naga detects schema drift on second tools/list with mutated description', async () => {
     const s = await spawnClient({ shapeDrift: true });
     try {
-      await s.client.initialize('enchanter-test', '0.0.1');
+      await s.client.initialize('beholder-test', '0.0.1');
 
       // First listTools — registers tools, naga fingerprints them.
       const tools1 = await s.client.listTools();
@@ -145,7 +145,7 @@ describe('integration: full stdio lifecycle vs mock MCP server', () => {
     setBudget('mock', 10_000);
     const s = await spawnClient();
     try {
-      await s.client.initialize('enchanter-test', '0.0.1');
+      await s.client.initialize('beholder-test', '0.0.1');
       await s.client.listTools();
 
       const ledgerBefore = getLedger().length;
@@ -161,7 +161,7 @@ describe('integration: full stdio lifecycle vs mock MCP server', () => {
   it('rejects an unknown qualified tool name via namespace registry', async () => {
     const s = await spawnClient();
     try {
-      await s.client.initialize('enchanter-test', '0.0.1');
+      await s.client.initialize('beholder-test', '0.0.1');
       await s.client.listTools();
 
       await expect(s.client.callTool('mock.nonexistent', {})).rejects.toThrow(/not found/i);
@@ -173,7 +173,7 @@ describe('integration: full stdio lifecycle vs mock MCP server', () => {
   it('orchestrator fires bus events visible via tap', async () => {
     const s = await spawnClient();
     try {
-      await s.client.initialize('enchanter-test', '0.0.1');
+      await s.client.initialize('beholder-test', '0.0.1');
       await s.client.listTools();
       await s.client.callTool('echo', { text: 'tap-test' });
 

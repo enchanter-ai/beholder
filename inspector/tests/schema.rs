@@ -7,7 +7,7 @@
 
 use std::path::PathBuf;
 
-use enchanter_inspector::schema::validate;
+use beholder_inspector::schema::validate;
 use serde_json::{json, Value};
 
 fn fixture_path() -> PathBuf {

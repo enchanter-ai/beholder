@@ -1,4 +1,4 @@
-/* scripts/red-team.ts — advanced red-team probes against Enchanter v0.2.
+/* scripts/red-team.ts — advanced red-team probes against Beholder v0.2.
    Unlike stress-plugins.ts which proves each plugin's nominal hotspot fires,
    this script *attacks* the defenses with realistic evasion attempts and
    reports BLOCKED / BYPASSED / DEGRADED honestly per scenario.
@@ -85,7 +85,7 @@ function probeHydraVeto(payload: Record<string, unknown>): { matched: boolean; c
 
 async function main(): Promise<void> {
   console.log(`${A.bold}${DOUBLE}`);
-  console.log('  Enchanter Red Team — advanced exploits & evasion attempts');
+  console.log('  Beholder Red Team — advanced exploits & evasion attempts');
   console.log(`${DOUBLE}${A.reset}`);
 
   const results: Result[] = [];

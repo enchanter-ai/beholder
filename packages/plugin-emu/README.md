@@ -1,22 +1,22 @@
 # @enchanter-ai/plugin-emu
 
-Token economy monitor + ±CI runway forecast — the **Emu** adapter for [Enchanter](https://github.com/enchanter-ai/enchanter).
+Token economy monitor + ±CI runway forecast — the **Emu** adapter for [Beholder](https://github.com/enchanter-ai/beholder).
 
 Emu observes per-call token usage and emits a remaining-runway forecast with a confidence interval. Runs in the `pre-dispatch` and `post-response` lifecycle phases.
 
 ## Install
 
 ```bash
-npm install enchanter @enchanter-ai/plugin-emu
+npm install beholder @enchanter-ai/plugin-emu
 ```
 
-`enchanter` is a peer dependency.
+`beholder` is a peer dependency.
 
 ## Usage
 
 ```ts
 import { emuAdapter, configureEmu } from '@enchanter-ai/plugin-emu';
-import { McpClient } from 'enchanter';
+import { McpClient } from 'beholder';
 
 configureEmu({ remaining_budget: 1_000_000 });
 
@@ -26,7 +26,7 @@ const client = new McpClient({
 });
 ```
 
-See the root [Enchanter README](https://github.com/enchanter-ai/enchanter#readme) for the full lifecycle and plugin contract.
+See the root [Beholder README](https://github.com/enchanter-ai/beholder#readme) for the full lifecycle and plugin contract.
 
 ## License
 

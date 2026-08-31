@@ -1,4 +1,4 @@
-/* enchanter/src/orchestration/request-context.ts — implements architecture-spec
+/* beholder/src/orchestration/request-context.ts — implements architecture-spec
    phase_2_coordination_pattern_decision.adr (ADR-001, hybrid orchestrator)
    and phase_5.cost_attribution_unit. Every request carries a correlation_id
    stamped at orchestrator entry; every bus emission propagates it. */

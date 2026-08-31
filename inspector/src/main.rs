@@ -1,4 +1,4 @@
-//! enchanter-inspector binary entry point.
+//! beholder-inspector binary entry point.
 //!
 //! Stdout is the event channel for downstream tools — never write logs there.
 //! All tracing output is routed to a rotating file inside the user's cache dir.
@@ -16,7 +16,7 @@ fn log_path() -> PathBuf {
         .or_else(|| std::env::var_os("LOCALAPPDATA").map(PathBuf::from))
         .or_else(dirs_cache_fallback)
         .unwrap_or_else(std::env::temp_dir);
-    base.join("enchanter").join("inspector.log")
+    base.join("beholder").join("inspector.log")
 }
 
 fn dirs_cache_fallback() -> Option<PathBuf> {
@@ -60,7 +60,7 @@ fn init_tracing() -> anyhow::Result<()> {
         .with_context(|| format!("opening log file {}", path.display()))?;
 
     let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("enchanter_inspector=info,warn"));
+        .unwrap_or_else(|_| EnvFilter::new("beholder_inspector=info,warn"));
 
     tracing_subscriber::registry()
         .with(filter)
@@ -78,5 +78,5 @@ fn init_tracing() -> anyhow::Result<()> {
 
 fn main() -> anyhow::Result<()> {
     init_tracing()?;
-    enchanter_inspector::run()
+    beholder_inspector::run()
 }

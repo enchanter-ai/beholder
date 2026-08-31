@@ -164,7 +164,7 @@ async function publishAll(bus: InProcessBus): Promise<void> {
 
 describe('Bridge round-trip', () => {
   it('writes one valid JSONL line per published event', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'enchanter-bridge-'));
+    const dir = mkdtempSync(join(tmpdir(), 'beholder-bridge-'));
     const path = join(dir, 'roundtrip.jsonl');
     try {
       const bus = new InProcessBus();

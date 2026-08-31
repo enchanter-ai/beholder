@@ -1,4 +1,4 @@
-/* enchanter/src/plugins/plugin-contract.ts — implements architecture-spec
+/* beholder/src/plugins/plugin-contract.ts — implements architecture-spec
    phase_1_plugin_role_mapping (the 10-plugin contract) + ADR-001 fail-open vs
    fail-closed policy. Every plugin adapter implements PluginAdapter. */
 

@@ -1,4 +1,4 @@
-/* enchanter/src/oauth/pkce.ts — implements architecture-spec
+/* beholder/src/oauth/pkce.ts — implements architecture-spec
    phase_3.oauth_2_1_pkce_rfc_8707_flow (MCP MUST: clients MUST use S256 PKCE,
    per spec citation S6). RFC 7636 conformant.
    Counter: plain code_challenge_method exists in OAuth 2.0 but is forbidden

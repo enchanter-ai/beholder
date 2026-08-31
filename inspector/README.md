@@ -1,47 +1,47 @@
-# enchanter-inspector
+# beholder-inspector
 
 <p align="center">
-  <img src="docs/assets/hero.png" alt="Enchanter Inspector — terminal cockpit for the Enchanter AI runtime" width="1280">
+  <img src="docs/assets/hero.png" alt="Beholder Inspector — terminal cockpit for the Beholder AI runtime" width="1280">
 </p>
 
-Terminal-first TUI cockpit for the [Enchanter](../) AI runtime — think `htop` / `btop` / `k9s` / `lazygit`, but for an AI agent runtime.
+Terminal-first TUI cockpit for the [Beholder](../) AI runtime — think `htop` / `btop` / `k9s` / `lazygit`, but for an AI agent runtime.
 
 > **Terminal is the cockpit. Web/Electron is the studio.**
 
-The inspector consumes the runtime's JSONL event stream and renders a live, navigable view of plugins, events, security, cost, drift, codebase impact, replay, runtime internals, and task graph. Lives inside the [Enchanter](../) monorepo as the Rust-side dashboard.
+The inspector consumes the runtime's JSONL event stream and renders a live, navigable view of plugins, events, security, cost, drift, codebase impact, replay, runtime internals, and task graph. Lives inside the [Beholder](../) monorepo as the Rust-side dashboard.
 
 ## Install / build
 
-This is a Rust crate inside the Enchanter monorepo at `client/enchanter/inspector/`. From this directory:
+This is a Rust crate inside the Beholder monorepo at `client/beholder/inspector/`. From this directory:
 
 ```bash
 cargo build --release
 ```
 
-The binary lands at `target/release/enchanter` (so `enchanter inspect` becomes one short command on PATH).
+The binary lands at `target/release/beholder` (so `beholder inspect` becomes one short command on PATH).
 
 ## Usage
 
 The default mode reads newline-delimited JSON events from **stdin** — pipe the runtime in:
 
 ```bash
-enchanter-runtime | enchanter
+beholder-runtime | beholder
 ```
 
 Replay a previously captured run:
 
 ```bash
-enchanter --from ./run-2026-04-30.jsonl
+beholder --from ./run-2026-04-30.jsonl
 # or via the explicit subcommand:
-enchanter inspect --from ./run-2026-04-30.jsonl
+beholder inspect --from ./run-2026-04-30.jsonl
 ```
 
 Connect to a live runtime socket:
 
 ```bash
-enchanter --socket 127.0.0.1:7878
+beholder --socket 127.0.0.1:7878
 # or unix socket
-enchanter --socket /tmp/enchanter.sock
+beholder --socket /tmp/beholder.sock
 ```
 
 ### Try it without a runtime
@@ -56,7 +56,7 @@ cargo run --example demo_emit -- --speed 4 | cargo run
 cargo run --example demo_emit -- --speed 0 | cargo run
 ```
 
-`stdout` is reserved for forwarding events to downstream tools; all log output is written to a file under `$XDG_CACHE_HOME/enchanter/inspector.log` (or the platform equivalent).
+`stdout` is reserved for forwarding events to downstream tools; all log output is written to a file under `$XDG_CACHE_HOME/beholder/inspector.log` (or the platform equivalent).
 
 ## Key bindings
 
@@ -88,7 +88,7 @@ cargo run --example demo_emit -- --speed 0 | cargo run
 
 ## Plugins
 
-The inspector tracks the ten Enchanter plugins, each with a stable accent color used in the UI:
+The inspector tracks the ten Beholder plugins, each with a stable accent color used in the UI:
 
 | Plugin   | Accent  |
 |----------|---------|
@@ -112,4 +112,4 @@ The inspector tracks the ten Enchanter plugins, each with a stable accent color 
 - `src/ui/` — shared theme, widgets, layout primitives
 - `src/views/` — one module per top-level screen
 
-See the parent monorepo README for how the inspector relates to `enchanter-runtime`, the `enchanter` Node CLI, and the broader plugin set.
+See the parent monorepo README for how the inspector relates to `beholder-runtime`, the `beholder` Node CLI, and the broader plugin set.

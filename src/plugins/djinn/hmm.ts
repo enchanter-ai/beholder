@@ -1,4 +1,4 @@
-/* enchanter/src/plugins/djinn/hmm.ts — D2 HMM drift labelling (v0.3.1).
+/* beholder/src/plugins/djinn/hmm.ts — D2 HMM drift labelling (v0.3.1).
    Implements the design in docs/v0.3/djinn-d2-hmm.md: a 3-state HMM over
    per-turn LCS observations with discrete emission buckets (high/mid/low).
 

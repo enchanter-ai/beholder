@@ -1,4 +1,4 @@
-/* enchanter/src/transport/stdio.ts — implements architecture-spec
+/* beholder/src/transport/stdio.ts — implements architecture-spec
    phase_3.transports.stdio (MCP MUSTs: newline-delimited messages, UTF-8,
    no embedded newlines, JSON-RPC 2.0 envelope) and phase_4 failure-mode 5
    (unbounded resources — body cap 8MB before parse).

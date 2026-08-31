@@ -99,17 +99,17 @@ export function validateLockstep(
       });
     }
 
-    const peer = manifest.peerDependencies?.enchanter;
+    const peer = manifest.peerDependencies?.beholder;
     if (!peer) {
       issues.push({
         package: pkg,
-        field: 'peerDependencies.enchanter',
-        message: 'missing peerDependencies.enchanter',
+        field: 'peerDependencies.beholder',
+        message: 'missing peerDependencies.beholder',
       });
     } else if (!isCompatiblePeerRange(peer, root.version)) {
       issues.push({
         package: pkg,
-        field: 'peerDependencies.enchanter',
+        field: 'peerDependencies.beholder',
         message: `peer range ${peer} does not admit root version ${root.version}`,
       });
     }

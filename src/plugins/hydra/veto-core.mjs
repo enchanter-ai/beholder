@@ -1,4 +1,4 @@
-/* enchanter/src/plugins/hydra/veto-core.mjs — the single shared hydra
+/* beholder/src/plugins/hydra/veto-core.mjs — the single shared hydra
  * security-veto core, consumed by BOTH enforcement paths:
  *
  *   1. SDK path — src/plugins/hydra.adapter.ts (via cve-patterns.ts, which

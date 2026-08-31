@@ -1,8 +1,8 @@
 /* src/observability/bus-client.ts — producer-side event forwarder.
  *
- * Producer subprocesses (enchanter mcp-wrap / watch / run / hooks) own their
+ * Producer subprocesses (beholder mcp-wrap / watch / run / hooks) own their
  * own in-process bus + plugins so veto decisions stay synchronous. This
- * helper opens a non-blocking connection to a running enchanter inspector's
+ * helper opens a non-blocking connection to a running beholder inspector's
  * broadcaster and forwards every locally-published event so the TUI sees
  * the full picture across all producers.
  *

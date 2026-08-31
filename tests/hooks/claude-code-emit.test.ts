@@ -31,11 +31,11 @@ function runHook(eventName: string, payload: unknown): { code: number | null; js
       HOME: cacheRoot,
     },
   });
-  return { code: result.status, jsonlPath: join(cacheRoot, 'enchanter', 'claude-code.jsonl') };
+  return { code: result.status, jsonlPath: join(cacheRoot, 'beholder', 'claude-code.jsonl') };
 }
 
 beforeEach(() => {
-  cacheRoot = mkdtempSync(join(tmpdir(), 'enchanter-cc-hook-'));
+  cacheRoot = mkdtempSync(join(tmpdir(), 'beholder-cc-hook-'));
 });
 
 afterEach(() => {

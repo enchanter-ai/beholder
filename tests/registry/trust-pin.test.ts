@@ -144,7 +144,7 @@ describe('PersistentTrustPinStore', () => {
   let storePath: string;
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'enchanter-trust-pin-'));
+    tmpDir = mkdtempSync(join(tmpdir(), 'beholder-trust-pin-'));
     storePath = join(tmpDir, 'trust-pin.jsonl');
   });
 

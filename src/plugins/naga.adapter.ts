@@ -1,4 +1,4 @@
-/* enchanter/src/plugins/naga.adapter.ts — v0.2 working implementation.
+/* beholder/src/plugins/naga.adapter.ts — v0.2 working implementation.
    Implements architecture-spec phase_4.failure_mode_2 (tool poisoning / schema
    mutation) + phase_4.failure_mode_10 (MCPoison schema injection) as secondary
    defense-in-depth via multi-axis structural fingerprinting sourced from
@@ -305,7 +305,7 @@ function handlePostResponse(event: EnchantedEvent): PluginAck {
 
 function handlePostSession(_event: EnchantedEvent): PluginAck {
   // N5 Gauss Accumulation is PreCompact-hook-driven in the naga-learning
-  // sub-plugin; the enchanter adapter emits ack here.
+  // sub-plugin; the beholder adapter emits ack here.
   return { status: 'ack' };
 }
 
