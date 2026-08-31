@@ -23,10 +23,12 @@
  */
 
 /**
- * v0.1 high-confidence CVE-anchored patterns. Each names the CWE/CVE class it
- * anchors against — no heuristic-only rules. Kept in sync with the SDK's
- * CvePattern shape (id, name, cve_anchor, match, severity, rationale) so
- * cve-patterns.ts can re-export this array verbatim.
+ * CVE-anchored pattern table (v0.6). Each entry names the CWE/CVE class it
+ * anchors against. `critical` entries are high-confidence and block; the
+ * `high` MCP entries are heuristic and advisory (warn, never block) — honest
+ * about their false-positive surface. Kept in sync with the SDK's CvePattern
+ * shape (id, name, cve_anchor, match, severity, rationale) so cve-patterns.ts
+ * can re-export this array verbatim.
  */
 export const VETO_PATTERNS = [
   {
@@ -68,6 +70,50 @@ export const VETO_PATTERNS = [
     match: /\bsudo\s+(?:-n\s+)?(?:visudo|tee\s+\/etc\/sudoers|sh\s+-c\s+["']?echo[^"']*NOPASSWD)/,
     severity: 'critical',
     rationale: 'attempting to grant passwordless sudo',
+  },
+  // MCP-2026 threat classes. The five above anchor on shell-command hazards;
+  // the MCP attack surface disclosed across 2025-2026 (40+ CVEs, NSA/CISA MCP
+  // security guidance, CSA "MCP by Design: RCE") lands in the tool-call corpus
+  // itself, so these anchor there.
+  {
+    id: 'h-reverse-shell',
+    name: 'reverse shell',
+    cve_anchor: 'CWE-78; MCP RCE post-exploitation (CSA/Ox "MCP by Design: RCE", 2026)',
+    match: /\bnc\s+[^\n]*-[a-z]*e\b|\bbash\s+-i\b[^\n]*(?:>&|\/dev\/tcp)|\/dev\/tcp\/[0-9]/,
+    severity: 'critical',
+    rationale: 'reverse/bind shell — remote code execution callback',
+  },
+  {
+    id: 'h-secret-file-exfil',
+    name: 'credential-file read',
+    cve_anchor: 'CWE-200; MCP lethal-trifecta exfil (external content + private data + egress)',
+    match: /(?:cat|less|more|head|tail|type|read|xxd|base64)\s+[^\n]*(?:\.env\b|\.aws\/credentials|\.npmrc|\.git-credentials|\.docker\/config\.json|\.kube\/config)/,
+    severity: 'critical',
+    rationale: 'reading an environment/credential file (secret exfiltration)',
+  },
+  {
+    id: 'h-mcp-tool-poisoning',
+    name: 'tool-poisoning / line-jumping directive',
+    cve_anchor: 'MCP tool poisoning + line jumping (Invariant Labs 2025; MCP threat class 2026)',
+    match: /<IMPORTANT>|\bignore (?:all )?(?:previous|prior) instructions\b|\bdo not (?:tell|inform|mention|reveal|notify)[^\n]{0,20}\bthe user\b/i,
+    severity: 'high',
+    rationale: 'hidden instruction in a tool description/result — advisory, heuristic',
+  },
+  {
+    id: 'h-mcp-cmd-injection',
+    name: 'shell-metachar command injection',
+    cve_anchor: 'CVE-2026-0755 / CVE-2026-0756 (MCP command injection via unsanitized exec)',
+    match: /\$\([^)]+\)|`[^`]+`|(?:;|&&|\|\|)\s*(?:rm|curl|wget|nc|bash|sh|python|node)\b/,
+    severity: 'high',
+    rationale: 'command substitution or chaining into a spawned command — advisory',
+  },
+  {
+    id: 'h-mcp-intent-rce',
+    name: 'Android intent / USSD injection',
+    cve_anchor: 'CVE-2026-35394 (Mobile MCP mobile_open_url intent RCE)',
+    match: /\bam\s+start\b|intent:\/\/|(?:^|["'\s])tel:[^"'\s]*[*#]/,
+    severity: 'high',
+    rationale: 'unvalidated Android intent/USSD from a URL argument — advisory',
   },
 ];
 
