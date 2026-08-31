@@ -1,5 +1,5 @@
-/* enchanter/src/plugins/djinn/hmm-store.ts — v0.4 carry-over #3.
-   Persists per-session HMM forward state across enchanter restarts so D2
+/* beholder/src/plugins/djinn/hmm-store.ts — v0.4 carry-over #3.
+   Persists per-session HMM forward state across beholder restarts so D2
    drift labelling is continuous, not reset-on-restart. v0.3.1 deferred
    persistence (docs/v0.3/djinn-d2-hmm.md "Open questions"); this module
    closes that gap.

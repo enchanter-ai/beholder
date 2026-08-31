@@ -1,22 +1,22 @@
 {
   "name": "@enchanter-ai/plugin-sylph",
   "version": "0.3.0",
-  "description": "Git workflow automation + destructive-op gate — Sylph adapter for Enchanter",
+  "description": "Git workflow automation + destructive-op gate — Sylph adapter for Beholder",
   "keywords": [
-    "enchanter",
+    "beholder",
     "mcp",
     "plugin",
     "git",
     "workflow"
   ],
-  "homepage": "https://github.com/enchanter-ai/enchanter#readme",
+  "homepage": "https://github.com/enchanter-ai/beholder#readme",
   "bugs": {
-    "url": "https://github.com/enchanter-ai/enchanter/issues"
+    "url": "https://github.com/enchanter-ai/beholder/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/enchanter-ai/enchanter.git",
-    "directory": "client/enchanter/packages/plugin-sylph"
+    "url": "git+https://github.com/enchanter-ai/beholder.git",
+    "directory": "client/beholder/packages/plugin-sylph"
   },
   "license": "Apache-2.0",
   "type": "module",
@@ -43,6 +43,6 @@
     "prepack": "npm run build"
   },
   "peerDependencies": {
-    "enchanter": ">=0.2.0"
+    "beholder": ">=0.2.0"
   }
 }

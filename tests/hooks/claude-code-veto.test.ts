@@ -44,13 +44,13 @@ function runPreToolUse(
   return {
     code: result.status,
     stdout: result.stdout ?? '',
-    jsonlPath: join(cacheRoot, 'enchanter', 'claude-code.jsonl'),
-    errPath: join(cacheRoot, 'enchanter', 'claude-code.err'),
+    jsonlPath: join(cacheRoot, 'beholder', 'claude-code.jsonl'),
+    errPath: join(cacheRoot, 'beholder', 'claude-code.err'),
   };
 }
 
 beforeEach(() => {
-  cacheRoot = mkdtempSync(join(tmpdir(), 'enchanter-veto-hook-'));
+  cacheRoot = mkdtempSync(join(tmpdir(), 'beholder-veto-hook-'));
 });
 
 afterEach(() => {
@@ -128,7 +128,7 @@ describe('claude-code-emit.mjs — PreToolUse security veto', () => {
         tool_name: 'Bash',
         tool_input: { command: 'rm -rf /' },
       },
-      { ENCHANTER_VETO_SELFTEST_THROW: '1' },
+      { BEHOLDER_VETO_SELFTEST_THROW: '1' },
     );
     // Fail-open: no deny emitted, exit 0, the tool call proceeds.
     expect(code).toBe(0);

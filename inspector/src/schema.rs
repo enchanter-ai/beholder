@@ -1,4 +1,4 @@
-//! Minimal JSON Schema validator for the Enchanter event-bus wire format.
+//! Minimal JSON Schema validator for the Beholder event-bus wire format.
 //!
 //! Mirrors `src/observability/schema.ts` on the TS side. Loads
 //! `docs/event-schema.json` at compile time via `include_str!`, parses it

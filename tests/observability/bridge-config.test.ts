@@ -1,5 +1,5 @@
 /* tests/observability/bridge-config.test.ts — unit tests for the
- * ENCHANTER_BRIDGE env var parser + sink factory. Coverage:
+ * BEHOLDER_BRIDGE env var parser + sink factory. Coverage:
  *   - every accepted form parses to the expected spec
  *   - invalid forms throw with a useful message containing the bad value
  *     and at least one example
@@ -82,38 +82,38 @@ describe('parseBridgeEnv', () => {
 
   it('throws on unknown scheme', () => {
     expect(() => parseBridgeEnv('http://localhost:7878')).toThrow(
-      /invalid ENCHANTER_BRIDGE/,
+      /invalid BEHOLDER_BRIDGE/,
     );
     expect(() => parseBridgeEnv('http://localhost:7878')).toThrow(/examples/);
   });
 
   it('throws on bare hostname (no scheme)', () => {
     expect(() => parseBridgeEnv('127.0.0.1:7878')).toThrow(
-      /invalid ENCHANTER_BRIDGE/,
+      /invalid BEHOLDER_BRIDGE/,
     );
   });
 
   it('throws on tcp:// with missing port', () => {
     expect(() => parseBridgeEnv('tcp://127.0.0.1')).toThrow(
-      /invalid ENCHANTER_BRIDGE/,
+      /invalid BEHOLDER_BRIDGE/,
     );
   });
 
   it('throws on tcp:// with non-numeric port', () => {
     expect(() => parseBridgeEnv('tcp://127.0.0.1:abc')).toThrow(
-      /invalid ENCHANTER_BRIDGE/,
+      /invalid BEHOLDER_BRIDGE/,
     );
   });
 
   it('throws on tcp:// with out-of-range port', () => {
     expect(() => parseBridgeEnv('tcp://127.0.0.1:99999')).toThrow(
-      /invalid ENCHANTER_BRIDGE/,
+      /invalid BEHOLDER_BRIDGE/,
     );
   });
 
   it('throws on file:// with empty path', () => {
-    expect(() => parseBridgeEnv('file://')).toThrow(/invalid ENCHANTER_BRIDGE/);
-    expect(() => parseBridgeEnv('file:')).toThrow(/invalid ENCHANTER_BRIDGE/);
+    expect(() => parseBridgeEnv('file://')).toThrow(/invalid BEHOLDER_BRIDGE/);
+    expect(() => parseBridgeEnv('file:')).toThrow(/invalid BEHOLDER_BRIDGE/);
   });
 
   it('error message names the offending value', () => {
@@ -138,7 +138,7 @@ describe('makeSinkFromEnv', () => {
   });
 
   it('returns a FileSink for file specs', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'enchanter-bridge-cfg-'));
+    const dir = mkdtempSync(join(tmpdir(), 'beholder-bridge-cfg-'));
     const path = join(dir, 'out.jsonl');
     try {
       const sink = makeSinkFromEnv({ kind: 'file', path });

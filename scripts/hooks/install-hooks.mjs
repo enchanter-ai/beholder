@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* scripts/hooks/install-hooks.mjs — one-shot installer for the Claude
- * Code → enchanter inspector wire-up.
+ * Code → beholder inspector wire-up.
  *
  * Adds entries under `hooks` in ~/.claude/settings.json so Claude Code
  * invokes scripts/hooks/claude-code-emit.mjs on each session lifecycle
@@ -37,13 +37,13 @@ const HOOK_EVENTS = [
   'PreCompact',
 ];
 
-const MARKER = 'enchanter:claude-code-emit'; // command substring we recognize
+const MARKER = 'beholder:claude-code-emit'; // command substring we recognize
 
 const argv = process.argv.slice(2);
 const uninstall = argv.includes('--uninstall');
 // `--silent` is for the npm postinstall path. Stay no-op-quiet when the
 // user doesn't have Claude Code installed (`~/.claude/` directory is
-// absent), so `npm install enchanter` doesn't print scary errors for
+// absent), so `npm install beholder` doesn't print scary errors for
 // users who only want the SDK/inspector and aren't using Claude Code.
 const silent = argv.includes('--silent');
 
@@ -67,7 +67,7 @@ function cachePath() {
   else if (process.platform === 'win32' && process.env.LOCALAPPDATA)
     base = process.env.LOCALAPPDATA;
   else base = path.join(os.homedir(), '.cache');
-  return path.join(base, 'enchanter', 'claude-code.jsonl');
+  return path.join(base, 'beholder', 'claude-code.jsonl');
 }
 
 function readSettings(p) {
@@ -143,7 +143,7 @@ function main() {
   if (!fs.existsSync(EMITTER)) {
     process.stderr.write(
       `[install-hooks] emitter not found at ${EMITTER}\n` +
-        `Did you run this from a checkout of the enchanter package?\n`,
+        `Did you run this from a checkout of the beholder package?\n`,
     );
     process.exit(2);
   }
@@ -166,7 +166,7 @@ function main() {
     `[install-hooks] installed ${added} hook${added === 1 ? '' : 's'} ` +
       `(${skipped} already present) → ${sp}\n` +
       `JSONL stream: ${out}\n` +
-      `Launch the inspector with: enchanter inspect --tail "${out}"\n`,
+      `Launch the inspector with: beholder inspect --tail "${out}"\n`,
   );
 }
 

@@ -1,14 +1,14 @@
 /* scripts/run.ts — process supervisor that wraps any shell command and emits
- * Enchanter bus events tracking lifecycle, stdout/stderr lines, and exit code.
+ * Beholder bus events tracking lifecycle, stdout/stderr lines, and exit code.
  *
  * Usage:
- *   enchanter run -- <cmd> [<args>...]
- *   enchanter run -- npm test
- *   enchanter run -- tsc --watch
- *   enchanter run -- node -e 'console.log(1)'
+ *   beholder run -- <cmd> [<args>...]
+ *   beholder run -- npm test
+ *   beholder run -- tsc --watch
+ *   beholder run -- node -e 'console.log(1)'
  *
  * Forwards the child's stdout/stderr to our own so the user sees their build
- * output normally; in parallel, ships per-line events to a running enchanter
+ * output normally; in parallel, ships per-line events to a running beholder
  * inspector. Exit code mirrors the child's. SIGINT propagates to the child.
  *
  * Events emitted (phase = 'cross-session', source = 'run', tier = 'HIGH'):
@@ -36,8 +36,8 @@ const childArgv = sepIdx >= 0 ? args.slice(sepIdx + 1) : [];
 
 if (childArgv.length === 0) {
   process.stderr.write(
-    'usage: enchanter run -- <cmd> [<args>...]\n' +
-    'example: enchanter run -- npm test\n',
+    'usage: beholder run -- <cmd> [<args>...]\n' +
+    'example: beholder run -- npm test\n',
   );
   process.exit(2);
 }
@@ -51,17 +51,17 @@ if (!cmd) process.exit(2);
 // All events flow through an in-process bus. The legacy WS broadcaster is
 // attached as one subscriber (preserves existing inspector behavior); the
 // optional Bridge below is a second subscriber that ships JSONL to a sink
-// (stdout / TCP / file) when ENCHANTER_BRIDGE is set.
+// (stdout / TCP / file) when BEHOLDER_BRIDGE is set.
 const bus = new InProcessBus();
-const broadcaster = new BusClient(process.env['ENCHANTER_BUS_URL'] ?? DEFAULT_BROADCASTER_URL);
+const broadcaster = new BusClient(process.env['BEHOLDER_BUS_URL'] ?? DEFAULT_BROADCASTER_URL);
 broadcaster.connect();
 broadcaster.attach(bus);
 
-// ENCHANTER_BRIDGE env switch — see src/observability/bridge-config.ts.
+// BEHOLDER_BRIDGE env switch — see src/observability/bridge-config.ts.
 // stdout sink conflicts with logging-or-piping anything else through stdout
 // (the wrapped child's stdout is forwarded below); when 'stdout' is selected
 // we route diagnostics + the child's stdout to stderr to keep the wire pure.
-const bridgeSpec = parseBridgeEnv(process.env['ENCHANTER_BRIDGE']);
+const bridgeSpec = parseBridgeEnv(process.env['BEHOLDER_BRIDGE']);
 const bridgeSink = makeSinkFromEnv(bridgeSpec);
 let bridge: Bridge | null = null;
 if (bridgeSink !== null) {
@@ -78,7 +78,7 @@ if (bridgeSpec.kind !== 'off') {
     bridgeSpec.kind === 'stdout' ? 'stdout'
     : bridgeSpec.kind === 'tcp' ? `tcp://${bridgeSpec.host}:${bridgeSpec.port}`
     : `file://${bridgeSpec.path}`;
-  process.stderr.write(`[enchanter run] bridge enabled: ${desc}\n`);
+  process.stderr.write(`[beholder run] bridge enabled: ${desc}\n`);
 }
 
 const correlationId = `run-${randomUUID().slice(0, 8)}`;
@@ -106,7 +106,7 @@ const child = spawn(cmd, cmdArgs, {
 }) as ChildProcessByStdio<null, Readable, Readable>;
 
 child.on('error', (err) => {
-  process.stderr.write(`[enchanter run] failed to spawn '${cmd}': ${err.message}\n`);
+  process.stderr.write(`[beholder run] failed to spawn '${cmd}': ${err.message}\n`);
   shutdown(1);
 });
 

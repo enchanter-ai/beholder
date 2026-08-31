@@ -1,20 +1,20 @@
-# Claude Code → Enchanter Inspector
+# Claude Code → Beholder Inspector
 
-Wire your real Claude Code work into the Enchanter inspector cockpit. No demo
+Wire your real Claude Code work into the Beholder inspector cockpit. No demo
 loop, no synthetic data — when you're using Claude Code, the inspector shows
 your actual tool calls, durations, costs, and lifecycle phases.
 
 ## Why
 
 The inspector renders ten live views over a JSONL event stream. The bridge
-already knows how to translate enchanter's in-process bus into that wire
+already knows how to translate beholder's in-process bus into that wire
 format — but if you're driving real work through Claude Code itself, you want
 those events to land in the same stream. This integration installs a Claude
 Code session hook that emits to a local JSONL file the inspector can tail.
 
 ## Install
 
-From a checkout of the `enchanter` package:
+From a checkout of the `beholder` package:
 
 ```bash
 node scripts/hooks/install-hooks.mjs
@@ -27,13 +27,13 @@ The installer is idempotent — re-running won't duplicate entries. It edits
 ## Launch the inspector
 
 ```bash
-enchanter inspect --tail ~/.cache/enchanter/claude-code.jsonl
+beholder inspect --tail ~/.cache/beholder/claude-code.jsonl
 ```
 
-On Windows the path is `%LOCALAPPDATA%\enchanter\claude-code.jsonl`. The
+On Windows the path is `%LOCALAPPDATA%\beholder\claude-code.jsonl`. The
 emitter resolves the cache base the same way the inspector does:
 `XDG_CACHE_HOME` → `LOCALAPPDATA` → `HOME/.cache` → tmpdir, all under an
-`enchanter/` subdir.
+`beholder/` subdir.
 
 ## Hook event → wire event mapping
 
@@ -53,7 +53,7 @@ emitter resolves the cache base the same way the inspector does:
 
 Each hook also emits derived events that drive the cockpit's PLUGINS table
 from real session activity. These are computed from a per-session state
-file at `~/.cache/enchanter/plugin-state.json` (or `%LOCALAPPDATA%\...` on
+file at `~/.cache/beholder/plugin-state.json` (or `%LOCALAPPDATA%\...` on
 Windows) that accumulates tool counts, error counts, file access, and the
 session anchor across hook firings. The state file is rewritten atomically
 (write tmp + rename) and reset on `SessionEnd`.
@@ -94,7 +94,7 @@ node scripts/hooks/install-hooks.mjs --uninstall
 ```
 
 Or hand-edit `~/.claude/settings.json` and remove the entries whose `command`
-strings contain `enchanter:claude-code-emit`.
+strings contain `beholder:claude-code-emit`.
 
 ## Privacy
 
@@ -123,7 +123,7 @@ one place the veto logic lives; there is no second copy to drift.
   { "hookSpecificOutput": {
       "hookEventName": "PreToolUse",
       "permissionDecision": "deny",
-      "permissionDecisionReason": "enchanter/hydra security veto: h-rm-rf-root …" } }
+      "permissionDecisionReason": "beholder/hydra security veto: h-rm-rf-root …" } }
   ```
 
   `permissionDecision` is one of `allow` / `deny` / `ask` — the hook only ever
@@ -138,6 +138,6 @@ one place the veto logic lives; there is no second copy to drift.
 
 - **No events showing up:** confirm `~/.claude/settings.json` lists the hook
   entries. Run `claude` once after install so the settings are picked up.
-- **Errors:** check `~/.cache/enchanter/claude-code.err` (Linux/Mac) or
-  `%LOCALAPPDATA%\enchanter\claude-code.err` (Windows).
+- **Errors:** check `~/.cache/beholder/claude-code.err` (Linux/Mac) or
+  `%LOCALAPPDATA%\beholder\claude-code.err` (Windows).
 - **File grew large:** the emitter rotates at 5 MB to a `.1` sibling.

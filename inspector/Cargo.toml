@@ -1,13 +1,13 @@
 [package]
-name = "enchanter-inspector"
-version = "0.5.0"
+name = "beholder-inspector"
+version = "0.6.0"
 edition = "2021"
-default-run = "enchanter"
-description = "Terminal-first TUI cockpit for the Enchanter AI runtime"
+default-run = "beholder"
+description = "Terminal-first TUI cockpit for the Beholder AI runtime"
 license = "Apache-2.0"
 
 [[bin]]
-name = "enchanter"
+name = "beholder"
 path = "src/main.rs"
 
 [dependencies]

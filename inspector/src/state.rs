@@ -1,4 +1,4 @@
-//! Central application state for the Enchanter inspector TUI.
+//! Central application state for the Beholder inspector TUI.
 //!
 //! `AppState` is the single source of truth shared by the event loop, the
 //! input handlers (`&mut AppState`) and the view renderers (`&AppState`).
@@ -753,9 +753,9 @@ fn first_email_in(s: &str) -> Option<String> {
     None
 }
 
-/// Tracing-log file size in **bytes**. Looks at `~/.cache/enchanter/inspector.log`
-/// (and the Windows-equivalents `%LOCALAPPDATA%\enchanter\inspector.log`,
-/// `%USERPROFILE%\.cache\enchanter\inspector.log`). Returns 0 when none exist
+/// Tracing-log file size in **bytes**. Looks at `~/.cache/beholder/inspector.log`
+/// (and the Windows-equivalents `%LOCALAPPDATA%\beholder\inspector.log`,
+/// `%USERPROFILE%\.cache\beholder\inspector.log`). Returns 0 when none exist
 /// or metadata is unreadable. Cheap enough to call on a tick refresh — pure
 /// metadata read, no scan. Skips paths that resolve to directories so the
 /// formatter doesn't have to deal with platform-dependent dir-size values.
@@ -765,14 +765,14 @@ pub fn tracing_log_size_bytes() -> u64 {
         candidates.push(
             std::path::Path::new(&home)
                 .join(".cache")
-                .join("enchanter")
+                .join("beholder")
                 .join("inspector.log"),
         );
     }
     if let Ok(local) = std::env::var("LOCALAPPDATA") {
         candidates.push(
             std::path::Path::new(&local)
-                .join("enchanter")
+                .join("beholder")
                 .join("inspector.log"),
         );
     }
@@ -780,7 +780,7 @@ pub fn tracing_log_size_bytes() -> u64 {
         candidates.push(
             std::path::Path::new(&profile)
                 .join(".cache")
-                .join("enchanter")
+                .join("beholder")
                 .join("inspector.log"),
         );
     }
@@ -911,7 +911,7 @@ pub fn detect_claude_workspace() -> String {
     }
 
     // Fallback: project-dir name is a slug-encoded version of the cwd
-    // (e.g. `C--git-enchanter-inspector` for `C:/git/enchanter-inspector`).
+    // (e.g. `C--git-beholder-inspector` for `C:/git/beholder-inspector`).
     // Take the slug's last `-`-separated segment as a best-effort basename.
     if let Some(slug) = project_dir.file_name().and_then(|s| s.to_str()) {
         if let Some(last) = slug.rsplit('-').next() {
@@ -934,9 +934,9 @@ pub fn process_uptime_seconds() -> u64 {
     STARTED_AT.get().map(|t| t.elapsed().as_secs()).unwrap_or(0)
 }
 
-/// Best-effort env label: `$ENCHANTER_ENV` or `"local"`.
+/// Best-effort env label: `$BEHOLDER_ENV` or `"local"`.
 pub fn detect_env() -> String {
-    std::env::var("ENCHANTER_ENV").unwrap_or_else(|_| "local".to_string())
+    std::env::var("BEHOLDER_ENV").unwrap_or_else(|_| "local".to_string())
 }
 
 /// Pending human-in-the-loop approval (v0.5 #4). Pushed onto

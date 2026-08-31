@@ -1,4 +1,4 @@
-# Enchanter event-schema (JSONL bridge)
+# Beholder event-schema (JSONL bridge)
 
 Authoritative machine schema: [`event-schema.json`](./event-schema.json).
 Both sides of the wire validate every event against that file at boundary —
@@ -139,7 +139,7 @@ producing the flat top-level shape Rust expects.
 The bridge can also flow JSONL **outbound from the inspector to the runtime**
 on the same TCP socket. Read-only sources (`Source::Socket`, file, stdin)
 ignore the write half; the bidirectional opt-in is `Source::SocketControl`
-(`enchanter --control-socket addr`) on the Rust side and constructing a
+(`beholder --control-socket addr`) on the Rust side and constructing a
 `TcpControlSink` (or attaching any `ControlChannel`) on the TS side.
 
 Direction is inferred from the top-level discriminator:

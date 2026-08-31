@@ -1,4 +1,4 @@
-/* enchanter/src/plugins/sylph.adapter.ts — v0.2 working implementation.
+/* beholder/src/plugins/sylph.adapter.ts — v0.2 working implementation.
    Cites: architecture-spec phase_1.sylph + plugins/sylph source (README.md §
    "The Decision-Gate Contract" for W5 destructive-op patterns; README.md §
    "The Science Behind Sylph" W2 for Jaccard-Cosine Boundary Segmentation).

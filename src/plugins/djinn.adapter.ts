@@ -1,4 +1,4 @@
-/* enchanter/src/plugins/djinn.adapter.ts — v0.2 implementation.
+/* beholder/src/plugins/djinn.adapter.ts — v0.2 implementation.
    Implements architecture-spec phase_1.djinn (intent anchoring + drift detection
    at anchor + post-session phases) drawing from plugins/djinn source:
    shared/scripts/engines/c1_lcs.py (D1 Hunt-Szymanski LCS), plugins/intent-anchor
@@ -82,9 +82,9 @@ function lcsRatio(a: string[], b: string[]): number {
 // In-memory anchor store — keyed by session_id.
 // ---------------------------------------------------------------------------
 
-// [author judgment] In-memory Map is appropriate for the enchanter process
+// [author judgment] In-memory Map is appropriate for the beholder process
 // lifetime. Cross-process / cross-restart persistence is owned by the
-// plugins/intent-anchor state files on disk; the enchanter adapter is the
+// plugins/intent-anchor state files on disk; the beholder adapter is the
 // in-process representation only.
 const ANCHORS = new Map<string, SessionAnchor>();
 
@@ -113,7 +113,7 @@ export interface DjinnConfig {
 }
 
 /**
- * Configure the djinn adapter. Call once at enchanter startup; safe to call
+ * Configure the djinn adapter. Call once at beholder startup; safe to call
  * again (e.g., in tests) — re-configuring with a different path swaps the
  * store and replays from the new file.
  */

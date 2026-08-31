@@ -61,7 +61,7 @@ describe('subscribeNotifier', () => {
     expect(captured).toHaveLength(1);
     expect(captured[0].message).toContain('🛡 Security veto:');
     expect(captured[0].message).toContain('h-rm-rf-root');
-    expect(captured[0].title).toBe('Enchanter');
+    expect(captured[0].title).toBe('Beholder');
 
     handle.unsubscribe();
   });

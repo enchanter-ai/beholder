@@ -1,4 +1,4 @@
-/* enchanter/src/observability/notifier.ts — implements architecture-spec
+/* beholder/src/observability/notifier.ts — implements architecture-spec
    phase_6.observability (desktop notification surface).
    Surfaces high-signal bus events as native OS notifications via node-notifier
    (Windows Toast / macOS NotificationCenter / Linux libnotify).
@@ -22,7 +22,7 @@ import type { Subscription } from '../bus/event-types.js';
 // ---------------------------------------------------------------------------
 
 export interface NotifierOptions {
-  /** Title prefix for all notifications. Default: "Enchanter". */
+  /** Title prefix for all notifications. Default: "Beholder". */
   title?: string;
   /** Whether to play a sound on notification. Default: true. */
   sound?: boolean;
@@ -128,7 +128,7 @@ async function getDefaultNotifyFn(): Promise<(msg: NotifyMessage) => void> {
 // ---------------------------------------------------------------------------
 
 export function subscribeNotifier(bus: Bus, options: NotifierOptions = {}): NotifierHandle {
-  const title       = options.title      ?? 'Enchanter';
+  const title       = options.title      ?? 'Beholder';
   const sound       = options.sound      ?? true;
   const topics      = options.topics     ?? HIGH_SIGNAL_TOPICS;
   const throttleMs  = options.throttleMs ?? 2_000;

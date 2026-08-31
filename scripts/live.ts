@@ -9,8 +9,8 @@
      6. pech ledger summary, bus tap of all observed events
 
    Run standalone:  npx tsx scripts/live.ts
-   With ENCHANTER_BRIDGE=stdout: bus events stream as JSONL on stdout for
-   the inspector. Combined into one command via `enchanter live`.
+   With BEHOLDER_BRIDGE=stdout: bus events stream as JSONL on stdout for
+   the inspector. Combined into one command via `beholder live`.
 */
 
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
@@ -44,11 +44,11 @@ import {
 
 const DIVIDER = '─'.repeat(72);
 
-// When ENCHANTER_BRIDGE=stdout, the JSONL wire owns process.stdout — route
+// When BEHOLDER_BRIDGE=stdout, the JSONL wire owns process.stdout — route
 // all human-readable output (banners, info lines, child stderr) to stderr so
 // the inspector sees a pristine event stream. Achieved by monkey-patching
 // console.log/info/warn at startup so we don't have to touch every call site.
-const BRIDGE_SPEC = parseBridgeEnv(process.env.ENCHANTER_BRIDGE);
+const BRIDGE_SPEC = parseBridgeEnv(process.env.BEHOLDER_BRIDGE);
 const STDOUT_OWNED_BY_BRIDGE = BRIDGE_SPEC.kind === 'stdout';
 if (STDOUT_OWNED_BY_BRIDGE) {
   const writeErr = (...args: unknown[]) => {
@@ -70,7 +70,7 @@ function banner(title: string): void {
 
 async function main(): Promise<void> {
   // 1. Sandbox setup ─────────────────────────────────────────────────────────
-  const sandbox = join(tmpdir(), `enchanter-demo-${Date.now()}`);
+  const sandbox = join(tmpdir(), `beholder-demo-${Date.now()}`);
   mkdirSync(sandbox, { recursive: true });
   const samplePath = join(sandbox, 'config.txt');
   // Plant a fake secret to demonstrate hydra's secret masking.
@@ -81,7 +81,7 @@ async function main(): Promise<void> {
       'admin_email = admin@example.com',
       'AWS_KEY = AKIAIOSFODNN7EXAMPLE',
       'Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.payload.fakesig',
-      'note = enchanter demo file',
+      'note = beholder demo file',
     ].join('\n'),
     'utf8',
   );
@@ -129,7 +129,7 @@ async function main(): Promise<void> {
     ],
   });
 
-  // Bridge: when ENCHANTER_BRIDGE is set, forward every bus event as JSONL
+  // Bridge: when BEHOLDER_BRIDGE is set, forward every bus event as JSONL
   // to a sink (stdout/file/tcp). Default off — unset env preserves the
   // existing standalone-script behavior.
   const bridgeSink = makeSinkFromEnv(BRIDGE_SPEC);
@@ -139,7 +139,7 @@ async function main(): Promise<void> {
   try {
     // 4. initialize ──────────────────────────────────────────────────────────
     banner('Phase 1: initialize handshake');
-    const info = await client.initialize('enchanter-demo', '0.2.0');
+    const info = await client.initialize('beholder-demo', '0.2.0');
     console.log('  server name    : ' + info.name);
     console.log('  server version : ' + info.version);
     console.log('  capabilities   : ' + JSON.stringify(Object.keys(info.capabilities)));
@@ -224,7 +224,7 @@ async function main(): Promise<void> {
       console.log('    ' + count.toString().padStart(4) + '  ' + topic);
     }
 
-    banner('All phases complete — Enchanter v0.2 verified live ✓');
+    banner('All phases complete — Beholder v0.2 verified live ✓');
   } finally {
     await bridge?.stop();
     client.shutdown();

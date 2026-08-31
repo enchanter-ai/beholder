@@ -6,9 +6,9 @@
 //! transport, parses the approval, and replies with a serialized
 //! `ControlCommand::ApprovalResponse`.
 
-use enchanter_inspector::control::{ApprovalDecision, ControlCommand};
-use enchanter_inspector::event::Event;
-use enchanter_inspector::transport::{Source, Transport};
+use beholder_inspector::control::{ApprovalDecision, ControlCommand};
+use beholder_inspector::event::Event;
+use beholder_inspector::transport::{Source, Transport};
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener;

@@ -1,4 +1,4 @@
-/* enchanter/src/oauth/nonce.ts — implements v0.3 follow-up #1 OAuth replay
+/* beholder/src/oauth/nonce.ts — implements v0.3 follow-up #1 OAuth replay
    defense (per IMPLEMENTATION_SUMMARY.md §v0.3 + README §v0.3 roadmap).
 
    Generates fresh, cryptographically-random nonces and RFC 3339 timestamps

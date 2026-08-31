@@ -1,4 +1,4 @@
-/* enchanter/src/bus/event-types.ts — implements architecture-spec
+/* beholder/src/bus/event-types.ts — implements architecture-spec
    phase_2 (hybrid coordination, bus surface) + phase_5.cost_attribution_unit.
    The EnchantedEvent shape is the cross-plugin lingua franca. */
 

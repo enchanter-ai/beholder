@@ -1,4 +1,4 @@
-/* enchanter/src/registry/trust-pin.ts — implements v0.3.1 follow-up #3
+/* beholder/src/registry/trust-pin.ts — implements v0.3.1 follow-up #3
    (FM 10 full trust-pin / MCPoison full closure). Design doc:
    docs/v0.3/trust-pinning.md.
 

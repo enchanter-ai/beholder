@@ -1,4 +1,4 @@
-/* enchanter/src/registry/namespace.ts — implements architecture-spec
+/* beholder/src/registry/namespace.ts — implements architecture-spec
    phase_4 failure-mode 1 (tool-name collisions): host namespace registry
    rejects bare-name resolution when 2+ servers export the same name; requires
    qualified `server_id.tool_name` resolution. Schema digest is pinned at

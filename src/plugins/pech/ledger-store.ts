@@ -1,4 +1,4 @@
-/* enchanter/src/plugins/pech/ledger-store.ts — v0.3 file-backed ledger.
+/* beholder/src/plugins/pech/ledger-store.ts — v0.3 file-backed ledger.
    Cites: architecture-spec phase_5.cost_attribution_unit + plugins/pech README
    (engine L0 ledger). v0.2 shipped in-memory only; v0.3 adds an opt-in
    append-only JSONL file backing so cost attribution survives restart and is
@@ -51,7 +51,7 @@ export function createFileLedgerStore(path: string): LedgerStore {
         // appendFileSync with a single line is the simplest safe atomic-ish
         // write on a single-process JSONL log. Concurrent multi-process
         // appenders are out of scope — pech runs in-process inside the
-        // enchanter runtime per architecture-spec phase_5.
+        // beholder runtime per architecture-spec phase_5.
         appendFileSync(path, JSON.stringify(entry) + '\n', { encoding: 'utf8' });
         return null;
       } catch (err) {

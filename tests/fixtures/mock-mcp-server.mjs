@@ -77,7 +77,7 @@ function handleRequest(req) {
     case 'initialize':
       reply(id, {
         protocolVersion: '2025-11-25',
-        serverInfo: { name: 'enchanter-mock', version: '0.1.0' },
+        serverInfo: { name: 'beholder-mock', version: '0.1.0' },
         capabilities: { tools: {} },
       });
       return;

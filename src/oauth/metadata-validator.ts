@@ -1,4 +1,4 @@
-/* enchanter/src/oauth/metadata-validator.ts — implements architecture-spec
+/* beholder/src/oauth/metadata-validator.ts — implements architecture-spec
    phase_4 failure-mode 7 (SSRF via OAuth metadata): URL parser rejects
    RFC 1918 / link-local / cloud-metadata / localhost / non-HTTPS-remote.
    Counter: a network-egress firewall is the proper defense; this is

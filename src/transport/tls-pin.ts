@@ -1,4 +1,4 @@
-/* enchanter/src/transport/tls-pin.ts — implements v0.3.1 follow-up #2
+/* beholder/src/transport/tls-pin.ts — implements v0.3.1 follow-up #2
    (FM 6 server spoofing). Pin store keyed by URL origin; each entry stores
    a SHA-256 over the leaf certificate's DER encoding (hex-lowercase) plus
    metadata. On every TLS handshake the connection's leaf cert is hashed

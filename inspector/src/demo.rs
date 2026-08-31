@@ -1,6 +1,6 @@
 //! Built-in demo event emitter.
 //!
-//! When `enchanter` is launched with no piped stdin (i.e. directly from a
+//! When `beholder` is launched with no piped stdin (i.e. directly from a
 //! terminal with no event source), this module synthesizes a continuous
 //! plausible event stream so the dashboard always shows life. This is not
 //! a fixture replay — events are generated on the fly with a tiny LCG PRNG
@@ -38,7 +38,7 @@ async fn run(tx: Sender<Event>) {
     // Bootstrap: emit session.started + plugin.loaded for all 10 plugins +
     // a runtime.metrics so the boxes have content immediately.
     let session_id = "demo-001";
-    let workspace = "enchanter-inspector";
+    let workspace = "beholder-inspector";
     let env_label = "local";
 
     let bootstrap = vec![

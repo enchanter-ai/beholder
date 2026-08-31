@@ -1,12 +1,12 @@
-# Contributing to Enchanter
+# Contributing to Beholder
 
-Thanks for your interest. This repo holds the **Enchanter SDK** — the TypeScript agent framework with native MCP support. The 10 capability plugins and Wixie (prompt engine) are sibling repos in the same GitHub org.
+Thanks for your interest. This repo holds the **Beholder SDK** — the TypeScript agent framework with native MCP support. The 10 capability plugins and Wixie (prompt engine) are sibling repos in the same GitHub org.
 
 ## Project structure (across the org)
 
 | Repo | What it is | Language |
 |---|---|---|
-| **`enchanter-ai/enchanter`** (this repo) | The SDK + MCP client | TypeScript |
+| **`enchanter-ai/beholder`** (this repo) | The SDK + MCP client | TypeScript |
 | `enchanter-ai/wixie` | Prompt-engineering meta-engine (research → craft → converge → harden → translate) | Python + Markdown |
 | `enchanter-ai/{crow,djinn,emu,gorgon,hydra,lich,naga,pech,schematic,sylph}` | 10 capability plugins (Claude Code skills + Python algorithms) | Python + Markdown SKILL.md |
 
@@ -15,8 +15,8 @@ The TypeScript adapters in this repo at `src/plugins/*.adapter.ts` port each plu
 ## Development setup
 
 ```bash
-git clone https://github.com/enchanter-ai/enchanter
-cd enchanter
+git clone https://github.com/enchanter-ai/beholder
+cd beholder
 npm install
 npm run typecheck
 npm test
@@ -42,7 +42,7 @@ See [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md) for the prioritized v
 
 Every plugin honors the `shared/conduct/*.md` modules referenced in its `CLAUDE.md`. The 13 modules cover discipline, context hygiene, verification, delegation, failure-mode taxonomy, tool-use, formatting, skill-authoring, hooks, precedent, tier-sizing, web-fetch, and the inference substrate.
 
-Within the Enchanter SDK, plugin adapters live at `src/plugins/<name>.adapter.ts`. Each adapter implements the `PluginAdapter` interface from `src/plugins/plugin-contract.ts`:
+Within the Beholder SDK, plugin adapters live at `src/plugins/<name>.adapter.ts`. Each adapter implements the `PluginAdapter` interface from `src/plugins/plugin-contract.ts`:
 
 ```typescript
 export interface PluginAdapter {
@@ -62,7 +62,7 @@ Required reading before submitting a plugin PR:
 
 ## Code conduct
 
-These behavioral modules apply to all code across the Enchanter project. Each lives at `shared/conduct/*.md` in the [enchanter-ai/wixie](https://github.com/enchanter-ai/wixie) repo and is referenced from each plugin's `CLAUDE.md`:
+These behavioral modules apply to all code across the Beholder project. Each lives at `shared/conduct/*.md` in the [enchanter-ai/wixie](https://github.com/enchanter-ai/wixie) repo and is referenced from each plugin's `CLAUDE.md`:
 
 - **discipline** — think-first, simplicity, surgical edits, goal-driven loops
 - **verification** — independent checks, baseline snapshots, dry-run for destructive ops

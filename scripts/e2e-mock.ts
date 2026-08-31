@@ -1,6 +1,6 @@
 /* scripts/e2e-mock.ts — end-to-end dogfood verification.
  *
- * Simulates a realistic developer feature workflow against the FULL Enchanter
+ * Simulates a realistic developer feature workflow against the FULL Beholder
  * pipeline (broadcaster + 9 plugins via Orchestrator) and verifies that every
  * plugin emits at least one event in response to events shaped like real
  * developer activity.
@@ -281,7 +281,7 @@ function pad(s: string, n: number): string {
 
 // ---------------------------------------------------------------------------
 async function main(): Promise<void> {
-  process.stdout.write('\n=== Enchanter dogfood E2E mock scenario ===\n');
+  process.stdout.write('\n=== Beholder dogfood E2E mock scenario ===\n');
   await runScenario();
   printReport();
   process.exit(0);

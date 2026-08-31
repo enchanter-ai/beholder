@@ -1,7 +1,7 @@
 /* scripts/mcp-wrap.ts — Stage A of the dogfood plan.
  *
  * Stdio middleware between Claude Code (or any MCP client) and an MCP server.
- * Each tools/call passes through Enchanter's hydra + sylph patterns; vetoes
+ * Each tools/call passes through Beholder's hydra + sylph patterns; vetoes
  * are answered with a JSON-RPC error before reaching the real server. Each
  * tools/call result has secrets masked before being forwarded back.
  *
@@ -9,13 +9,13 @@
  *          ◀─stdout──          ◀─stdout──
  *
  * Usage:
- *   enchanter mcp-wrap -- npx -y @modelcontextprotocol/server-filesystem /proj
+ *   beholder mcp-wrap -- npx -y @modelcontextprotocol/server-filesystem /proj
  *
  * Wire into Claude Code by replacing one MCP server entry:
- *   "command": "enchanter", "args": ["mcp-wrap", "--", <original cmd…>]
+ *   "command": "beholder", "args": ["mcp-wrap", "--", <original cmd…>]
  *
  * Events flow to the BusClient (default ws://127.0.0.1:3001/ws); a running
- * `enchanter inspect` will show every tool call live.
+ * `beholder inspect` will show every tool call live.
  */
 
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
@@ -35,8 +35,8 @@ const childArgv = sepIdx >= 0 ? args.slice(sepIdx + 1) : args;
 
 if (childArgv.length === 0) {
   process.stderr.write(
-    'usage: enchanter mcp-wrap -- <mcp-server-cmd> [<args>...]\n' +
-    'example: enchanter mcp-wrap -- npx -y @modelcontextprotocol/server-filesystem /tmp\n',
+    'usage: beholder mcp-wrap -- <mcp-server-cmd> [<args>...]\n' +
+    'example: beholder mcp-wrap -- npx -y @modelcontextprotocol/server-filesystem /tmp\n',
   );
   process.exit(2);
 }
@@ -44,7 +44,7 @@ if (childArgv.length === 0) {
 const [cmd, ...cmdArgs] = childArgv;
 if (!cmd) process.exit(2);
 
-const serverId = process.env['ENCHANTER_SERVER_ID'] ?? cmd;
+const serverId = process.env['BEHOLDER_SERVER_ID'] ?? cmd;
 
 // ---------------------------------------------------------------------------
 // Spawn the wrapped MCP server
@@ -56,7 +56,7 @@ const child = spawn(cmd, cmdArgs, {
 }) as ChildProcessByStdio<Writable, Readable, Readable>;
 
 child.on('error', (err) => {
-  process.stderr.write(`[enchanter mcp-wrap] failed to spawn '${cmd}': ${err.message}\n`);
+  process.stderr.write(`[beholder mcp-wrap] failed to spawn '${cmd}': ${err.message}\n`);
   process.exit(1);
 });
 child.stderr.on('data', (chunk: Buffer) => {
@@ -69,9 +69,9 @@ child.on('exit', (code, signal) => {
 });
 
 // ---------------------------------------------------------------------------
-// Optional fan-out to a running enchanter inspector
+// Optional fan-out to a running beholder inspector
 // ---------------------------------------------------------------------------
-const broadcaster = new BusClient(process.env['ENCHANTER_BUS_URL'] ?? DEFAULT_BROADCASTER_URL);
+const broadcaster = new BusClient(process.env['BEHOLDER_BUS_URL'] ?? DEFAULT_BROADCASTER_URL);
 broadcaster.connect();
 
 function emit(topic: string, phase: EnchantedEvent['phase'], payload: Record<string, unknown>, correlationId: string): void {
@@ -202,7 +202,7 @@ function sendVetoToParent(id: string | number | null, plugin: string, patternId:
     id,
     error: {
       code: -32001,
-      message: `Enchanter veto: ${reason}`,
+      message: `Beholder veto: ${reason}`,
       data: { plugin, pattern_id: patternId },
     },
   };

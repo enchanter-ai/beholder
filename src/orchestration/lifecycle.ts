@@ -1,4 +1,4 @@
-/* enchanter/src/orchestration/lifecycle.ts — implements architecture-spec
+/* beholder/src/orchestration/lifecycle.ts — implements architecture-spec
    phase_2 ADR-001 (hybrid coordination, 7-phase orchestrator) +
    phase_5.per_tier_subsystem_activity (advisory plugins fail-open with
    degraded=true; required plugins fail-closed on missing ACK).

@@ -1,19 +1,19 @@
 /* scripts/init-hooks.ts — Stage C of the dogfood plan.
  *
  * Installs git lifecycle hooks (pre-commit, pre-push, post-commit) into a
- * repo so commits/pushes flow into the Enchanter bus. Each hook is a small
+ * repo so commits/pushes flow into the Beholder bus. Each hook is a small
  * POSIX sh script that shells out to `node <pkg>/scripts/hook-emit.mjs`,
  * which packages the event and forwards it to a running inspector.
  *
  *   git event ──▶ .git/hooks/<hook> ──▶ hook-emit.mjs ──▶ BusClient ──▶ inspector
  *
  * Usage:
- *   enchanter init-hooks              # install into process.cwd()
- *   enchanter init-hooks ./some/repo  # install into a specific repo
+ *   beholder init-hooks              # install into process.cwd()
+ *   beholder init-hooks ./some/repo  # install into a specific repo
  *
  * Behavior:
  *   - Detects pre-existing hooks not written by us and backs them up to
- *     <hook>.pre-enchanter so user customizations are preserved.
+ *     <hook>.pre-beholder so user customizations are preserved.
  *   - Idempotent: re-running overwrites our own marker-bearing hooks
  *     in place; never duplicates or stacks backups.
  *   - Failure mode: if the inspector isn't running, the helper's BusClient
@@ -38,8 +38,8 @@ const repoRoot = args[0] ? resolve(args[0]) : process.cwd();
 const gitDir = join(repoRoot, '.git');
 if (!existsSync(gitDir) || !statSync(gitDir).isDirectory()) {
   process.stderr.write(
-    `[enchanter init-hooks] not a git repo: ${repoRoot}\n` +
-    `usage: enchanter init-hooks [<dir>]\n`,
+    `[beholder init-hooks] not a git repo: ${repoRoot}\n` +
+    `usage: beholder init-hooks [<dir>]\n`,
   );
   process.exit(2);
 }
@@ -68,7 +68,7 @@ const helperPath = join(packageDir, 'scripts', 'hook-emit.mjs');
 // The helper path is embedded as a single-quoted POSIX literal; we escape
 // any embedded single quote by closing/reopening the literal.
 // ---------------------------------------------------------------------------
-const MARKER = '# enchanter-hook v1';
+const MARKER = '# beholder-hook v1';
 
 function shQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
@@ -147,7 +147,7 @@ for (const spec of HOOKS) {
       action = 'replaced-own';
     } else {
       // User-authored or another tool's hook. Preserve before overwrite.
-      backupPath = `${hookPath}.pre-enchanter`;
+      backupPath = `${hookPath}.pre-beholder`;
       // Don't clobber an existing backup — leave the first one in place,
       // since re-running this script must remain idempotent.
       if (!existsSync(backupPath)) {
@@ -171,7 +171,7 @@ for (const spec of HOOKS) {
 // ---------------------------------------------------------------------------
 // Summary
 // ---------------------------------------------------------------------------
-process.stdout.write(`[enchanter init-hooks] installed into ${hooksDir}\n`);
+process.stdout.write(`[beholder init-hooks] installed into ${hooksDir}\n`);
 for (const r of results) {
   let line = `  ${r.hook.padEnd(12)} ${r.path}`;
   if (r.action === 'replaced-after-backup' && r.backupPath) {
@@ -186,9 +186,9 @@ process.stdout.write(
   '\n' +
   'Test it:\n' +
   '  cd ' + repoRoot + '\n' +
-  '  echo test > /tmp/enchanter-hook-smoke && git add -A && git commit -m test\n' +
+  '  echo test > /tmp/beholder-hook-smoke && git add -A && git commit -m test\n' +
   '\n' +
-  'Then check `enchanter inspect` for git.pre-commit.fired / git.post-commit.fired events.\n',
+  'Then check `beholder inspect` for git.pre-commit.fired / git.post-commit.fired events.\n',
 );
 
 process.exit(0);

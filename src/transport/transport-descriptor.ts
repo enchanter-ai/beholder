@@ -1,4 +1,4 @@
-/* enchanter/src/transport/transport-descriptor.ts — v0.4 follow-up #2
+/* beholder/src/transport/transport-descriptor.ts — v0.4 follow-up #2
    (FM 10 trust-pin closure, full digest).
 
    Background: TrustPinInputs in src/registry/trust-pin.ts already accepts six

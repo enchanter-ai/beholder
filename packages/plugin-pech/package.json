@@ -1,22 +1,22 @@
 {
   "name": "@enchanter-ai/plugin-pech",
   "version": "0.3.0",
-  "description": "Cost attribution ledger + budget thresholds — Pech adapter for Enchanter",
+  "description": "Cost attribution ledger + budget thresholds — Pech adapter for Beholder",
   "keywords": [
-    "enchanter",
+    "beholder",
     "mcp",
     "plugin",
     "cost",
     "ledger"
   ],
-  "homepage": "https://github.com/enchanter-ai/enchanter#readme",
+  "homepage": "https://github.com/enchanter-ai/beholder#readme",
   "bugs": {
-    "url": "https://github.com/enchanter-ai/enchanter/issues"
+    "url": "https://github.com/enchanter-ai/beholder/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/enchanter-ai/enchanter.git",
-    "directory": "client/enchanter/packages/plugin-pech"
+    "url": "git+https://github.com/enchanter-ai/beholder.git",
+    "directory": "client/beholder/packages/plugin-pech"
   },
   "license": "Apache-2.0",
   "type": "module",
@@ -43,6 +43,6 @@
     "prepack": "npm run build"
   },
   "peerDependencies": {
-    "enchanter": ">=0.2.0"
+    "beholder": ">=0.2.0"
   }
 }

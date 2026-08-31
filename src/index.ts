@@ -1,4 +1,4 @@
-/* enchanter/src/index.ts — public entrypoint for the v0.1 reference. */
+/* beholder/src/index.ts — public entrypoint for the v0.1 reference. */
 
 // Core types
 export type { LifecyclePhase, BudgetTier, RequestContext } from './orchestration/request-context.js';

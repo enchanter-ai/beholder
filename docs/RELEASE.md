@@ -1,11 +1,11 @@
 # Release Ceremony
 
-The Enchanter monorepo ships ten plugin packages (`@enchanter-ai/plugin-*`) in
-lockstep with the root `enchanter` version. Releases are gated on a human
+The Beholder monorepo ships ten plugin packages (`@enchanter-ai/plugin-*`) in
+lockstep with the root `beholder` version. Releases are gated on a human
 ceremony — the publish step runs in CI, but only after a maintainer has
 bumped versions, tagged, and pushed.
 
-The root `enchanter` package itself is `private: true` and is not pushed to
+The root `beholder` package itself is `private: true` and is not pushed to
 the npm registry. Only the `packages/*` plugins publish.
 
 ## Prerequisites
@@ -27,7 +27,7 @@ This rewrites:
 
 - `package.json` (root) `version` -> `0.4.0`
 - `packages/*/package.json` `version` -> `0.4.0`
-- `packages/*/package.json` `peerDependencies.enchanter` -> `^0.4.0`
+- `packages/*/package.json` `peerDependencies.beholder` -> `^0.4.0`
 
 It prints a summary of every field touched and exits 0. Inspect the diff
 before committing.
@@ -39,7 +39,7 @@ npm run release:dry
 ```
 
 This walks every package, validates lockstep (`name`, `version`,
-`peerDependencies.enchanter`, `files` includes `dist`) and runs
+`peerDependencies.beholder`, `files` includes `dist`) and runs
 `npm pack --dry-run` for each. It never invokes `npm publish`.
 
 If validation or pack-checks fail, fix the offending package and re-run.
@@ -84,17 +84,17 @@ To finish the release:
     npm publish --workspace @enchanter-ai/plugin-<name> --access public
   ```
 
-## Notes on the `peerDependencies.enchanter` range
+## Notes on the `peerDependencies.beholder` range
 
-In v0.3.x the peer range was relaxed to `>=0.2.0` because `enchanter` itself
+In v0.3.x the peer range was relaxed to `>=0.2.0` because `beholder` itself
 is `private: true` and not on the registry — there is no published version
 the peer range needed to match. After publishing the plugins, end-user
-applications will install `enchanter` (when/if it goes public) plus selected
+applications will install `beholder` (when/if it goes public) plus selected
 plugins; the peer range exists to express compatibility, not to gate
 installs.
 
 `release-prep.ts` retightens the range to `^<root-version>` on each bump so
 the published manifests express a clean semver-major compatibility statement.
-If `enchanter` itself remains `private: true` for v0.4 and beyond, the
+If `beholder` itself remains `private: true` for v0.4 and beyond, the
 practical effect is informational; if it eventually publishes, the range is
 already correct.

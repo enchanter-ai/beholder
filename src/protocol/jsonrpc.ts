@@ -1,4 +1,4 @@
-/* enchanter/src/protocol/jsonrpc.ts — implements architecture-spec
+/* beholder/src/protocol/jsonrpc.ts — implements architecture-spec
    phase_3_mcp_protocol_surface.transports.envelope (MCP MUST: JSON-RPC 2.0).
    Counter: a typed RPC framework (gRPC, tRPC) would give compile-time safety
    but the MCP spec mandates JSON-RPC 2.0 wire format, so we honor the spec. */
@@ -91,14 +91,14 @@ function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-// Standard JSON-RPC error codes + MCP/enchanter custom range
+// Standard JSON-RPC error codes + MCP/beholder custom range
 export const JSONRPC_ERROR = {
   PARSE_ERROR: -32700,
   INVALID_REQUEST: -32600,
   METHOD_NOT_FOUND: -32601,
   INVALID_PARAMS: -32602,
   INTERNAL_ERROR: -32603,
-  // enchanter custom (-32099..-32000 reserved range)
+  // beholder custom (-32099..-32000 reserved range)
   SECURITY_VETO: -32099,
   VENDOR_UNAVAILABLE: -32098,
   SAMPLING_BOUND_EXCEEDED: -32097,

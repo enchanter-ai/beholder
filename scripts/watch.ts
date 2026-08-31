@@ -1,17 +1,17 @@
 /* scripts/watch.ts — Stage B of the dogfood plan.
  *
- * Filesystem + git-ref watcher that emits Enchanter bus events. A running
- * `enchanter inspect` will surface every save, create, delete, and branch
- * switch as the user develops Enchanter itself.
+ * Filesystem + git-ref watcher that emits Beholder bus events. A running
+ * `beholder inspect` will surface every save, create, delete, and branch
+ * switch as the user develops Beholder itself.
  *
  *   <files change> ──▶ fs.watch ──▶ debounce ──▶ BusClient ──▶ inspector
  *
  * Usage:
- *   enchanter watch                  # watch process.cwd()
- *   enchanter watch ./some/dir       # watch a specific directory
+ *   beholder watch                  # watch process.cwd()
+ *   beholder watch ./some/dir       # watch a specific directory
  *
  * Events emitted:
- *   - enchanter.watch.started   once at startup
+ *   - beholder.watch.started   once at startup
  *   - fs.file.changed           file created / changed / deleted
  *   - fs.dir.changed            directory mutated
  *   - git.head.changed          .git/HEAD content changed (branch switch)
@@ -35,7 +35,7 @@ const args = process.argv.slice(2);
 const target = args[0] ? resolve(args[0]) : process.cwd();
 
 if (!existsSync(target)) {
-  process.stderr.write(`[enchanter watch] target does not exist: ${target}\n`);
+  process.stderr.write(`[beholder watch] target does not exist: ${target}\n`);
   process.exit(2);
 }
 
@@ -97,7 +97,7 @@ function isIgnored(relPath: string): boolean {
 // ---------------------------------------------------------------------------
 // BusClient wiring — same shape as scripts/mcp-wrap.ts.
 // ---------------------------------------------------------------------------
-const broadcaster = new BusClient(process.env['ENCHANTER_BUS_URL'] ?? DEFAULT_BROADCASTER_URL);
+const broadcaster = new BusClient(process.env['BEHOLDER_BUS_URL'] ?? DEFAULT_BROADCASTER_URL);
 broadcaster.connect();
 
 function emit(topic: string, payload: Record<string, unknown>): void {
@@ -209,17 +209,17 @@ const watcher = fsWatch(target, { recursive: true, encoding: 'utf8' }, (eventTyp
 });
 
 watcher.on('error', (err) => {
-  process.stderr.write(`[enchanter watch] watcher error: ${err.message}\n`);
+  process.stderr.write(`[beholder watch] watcher error: ${err.message}\n`);
 });
 
-emit('enchanter.watch.started', {
+emit('beholder.watch.started', {
   cwd: target,
   ignored: IGNORED_DESCRIPTOR,
 });
 
 process.stderr.write(
-  `[enchanter watch] watching ${target} (correlation_id=${correlationId})\n` +
-  `[enchanter watch] forwarding events to ${process.env['ENCHANTER_BUS_URL'] ?? DEFAULT_BROADCASTER_URL}\n`,
+  `[beholder watch] watching ${target} (correlation_id=${correlationId})\n` +
+  `[beholder watch] forwarding events to ${process.env['BEHOLDER_BUS_URL'] ?? DEFAULT_BROADCASTER_URL}\n`,
 );
 
 // Keep process alive even though fs.watch should hold the loop open.

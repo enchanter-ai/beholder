@@ -4,8 +4,8 @@ rem Usable double-clicked from Explorer, or chained via `start` / `wt`.
 
 cd /d "%~dp0\.."
 
-if not exist "target\release\enchanter.exe" (
-    echo enchanter.exe not built. Run: cargo build --release
+if not exist "target\release\beholder.exe" (
+    echo beholder.exe not built. Run: cargo build --release
     pause
     exit /b 1
 )
@@ -15,4 +15,4 @@ if not exist "target\release\examples\demo_emit.exe" (
     exit /b 1
 )
 
-target\release\examples\demo_emit.exe --speed 2 tests\fixtures\demo-events.jsonl | target\release\enchanter.exe
+target\release\examples\demo_emit.exe --speed 2 tests\fixtures\demo-events.jsonl | target\release\beholder.exe

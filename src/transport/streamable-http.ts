@@ -1,4 +1,4 @@
-/* enchanter/src/transport/streamable-http.ts — implements architecture-spec
+/* beholder/src/transport/streamable-http.ts — implements architecture-spec
    phase_3.transports.streamable_http (MCP MUSTs: server MUST provide single
    endpoint supporting POST + GET; client MUST POST to send JSON-RPC messages;
    client MUST send Accept: application/json, text/event-stream) and

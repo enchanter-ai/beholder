@@ -1,23 +1,23 @@
 {
   "name": "@enchanter-ai/plugin-hydra",
   "version": "0.3.0",
-  "description": "Real-time security interception with 1844 CVE-mapped patterns — Hydra adapter for Enchanter",
+  "description": "Real-time security interception with 1844 CVE-mapped patterns — Hydra adapter for Beholder",
   "keywords": [
-    "enchanter",
+    "beholder",
     "mcp",
     "plugin",
     "security",
     "cve",
     "secret-masking"
   ],
-  "homepage": "https://github.com/enchanter-ai/enchanter#readme",
+  "homepage": "https://github.com/enchanter-ai/beholder#readme",
   "bugs": {
-    "url": "https://github.com/enchanter-ai/enchanter/issues"
+    "url": "https://github.com/enchanter-ai/beholder/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/enchanter-ai/enchanter.git",
-    "directory": "client/enchanter/packages/plugin-hydra"
+    "url": "git+https://github.com/enchanter-ai/beholder.git",
+    "directory": "client/beholder/packages/plugin-hydra"
   },
   "license": "Apache-2.0",
   "type": "module",
@@ -44,6 +44,6 @@
     "prepack": "npm run build"
   },
   "peerDependencies": {
-    "enchanter": ">=0.2.0"
+    "beholder": ">=0.2.0"
   }
 }

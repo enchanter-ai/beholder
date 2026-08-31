@@ -257,13 +257,13 @@ fn runtime_log_path() -> Option<PathBuf> {
         .or_else(|| std::env::var_os("LOCALAPPDATA").map(PathBuf::from))
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))
         .unwrap_or_else(std::env::temp_dir);
-    Some(base.join("enchanter").join("runtime.log"))
+    Some(base.join("beholder").join("runtime.log"))
 }
 
 /// Spawn an arbitrary shell command and stream its stdout as JSONL events.
 /// Stderr is captured to a log file (NOT inherited) — inheriting writes to
 /// the same TTY the TUI's alternate-screen owns, smearing the cockpit on
-/// any npm-install / npx-cache output. Log path: `<cache>/enchanter/runtime.log`,
+/// any npm-install / npx-cache output. Log path: `<cache>/beholder/runtime.log`,
 /// where `<cache>` is `XDG_CACHE_HOME` / `LOCALAPPDATA` / `HOME/.cache` /
 /// the system temp dir, in that order.
 async fn run_exec(cmd: String, tx: mpsc::Sender<Event>) {
@@ -273,7 +273,7 @@ async fn run_exec(cmd: String, tx: mpsc::Sender<Event>) {
 
     // Resolve the runtime-log path. Best-effort — fall back to discarding
     // stderr if we can't open the file. Rotate if the existing log is over
-    // the cap so we don't grow unbounded across many `enchanter live` runs.
+    // the cap so we don't grow unbounded across many `beholder live` runs.
     const MAX_LOG_BYTES: u64 = 5 * 1024 * 1024; // 5 MB
     let log_path = runtime_log_path();
     if let Some(ref p) = log_path {
@@ -733,7 +733,7 @@ mod tests {
             .map(|d| d.as_nanos())
             .unwrap_or(0);
         let path =
-            std::env::temp_dir().join(format!("enchanter_inspector_test_{}_{}.jsonl", pid, nanos));
+            std::env::temp_dir().join(format!("beholder_inspector_test_{}_{}.jsonl", pid, nanos));
 
         // Write 3 valid lines + 1 malformed. Validity is determined by what
         // `crate::event::parse_line` accepts — events need a `type` discriminator

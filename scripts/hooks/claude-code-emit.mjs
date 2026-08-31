@@ -4,12 +4,12 @@
  * Invoked by Claude Code's hook subsystem on each lifecycle event
  * (SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop,
  * SubagentStop, SessionEnd). Reads the hook JSON payload from stdin,
- * translates it into one or more enchanter wire-schema events, and
+ * translates it into one or more beholder wire-schema events, and
  * appends them as JSONL to the user's local cache file. The Rust
- * inspector consumes that file via `enchanter inspect --tail <path>`.
+ * inspector consumes that file via `beholder inspect --tail <path>`.
  *
- *   claude-code lifecycle ──▶ this script ──▶ ~/.cache/enchanter/claude-code.jsonl
- *                                              ──▶ enchanter inspector
+ *   claude-code lifecycle ──▶ this script ──▶ ~/.cache/beholder/claude-code.jsonl
+ *                                              ──▶ beholder inspector
  *
  * Wire schema: docs/event-schema.md.
  *
@@ -58,7 +58,7 @@ import { decideVeto } from '../../src/plugins/hydra/veto-core.mjs';
 
 // --------------------------------------------------------------------------
 // Paths — same algorithm as inspector/src/main.rs::log_path():
-// XDG_CACHE_HOME → LOCALAPPDATA → HOME/.cache → tmpdir, then `enchanter/`.
+// XDG_CACHE_HOME → LOCALAPPDATA → HOME/.cache → tmpdir, then `beholder/`.
 // --------------------------------------------------------------------------
 function resolveCacheBase() {
   const xdg = process.env.XDG_CACHE_HOME;
@@ -72,7 +72,7 @@ function resolveCacheBase() {
   return os.tmpdir();
 }
 
-const cacheDir = path.join(resolveCacheBase(), 'enchanter');
+const cacheDir = path.join(resolveCacheBase(), 'beholder');
 const outPath = path.join(cacheDir, 'claude-code.jsonl');
 const errPath = path.join(cacheDir, 'claude-code.err');
 const stateFile = path.join(cacheDir, 'plugin-state.json');
@@ -655,7 +655,7 @@ function emitForHook(eventName, payload) {
       try {
         // Fault-injection seam (tests only; never set in production) — proves
         // the fail-open guarantee: an internal error must ALLOW the call.
-        if (process.env.ENCHANTER_VETO_SELFTEST_THROW === '1') {
+        if (process.env.BEHOLDER_VETO_SELFTEST_THROW === '1') {
           throw new Error('selftest: forced veto-core failure');
         }
         const cmd =
@@ -729,7 +729,7 @@ function emitForHook(eventName, payload) {
         hookResult = {
           deny: true,
           reason:
-            `enchanter/hydra security veto: ${b.id} (${b.cve_anchor}) — ${b.rationale}. ` +
+            `beholder/hydra security veto: ${b.id} (${b.cve_anchor}) — ${b.rationale}. ` +
             `Blocked by the auto-wired PreToolUse hook.`,
         };
       }

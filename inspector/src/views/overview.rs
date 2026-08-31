@@ -2,7 +2,7 @@
 //!
 //! Renders, top to bottom:
 //!
-//! 1. Top status bar    — `Enchanter — LIVE` left, key hints right-aligned
+//! 1. Top status bar    — `Beholder — LIVE` left, key hints right-aligned
 //! 2. Active session    — workspace, user, current task, file/risk/phase/age
 //! 3. Metrics row       — three side-by-side bordered boxes:
 //!    Session Metrics | Runtime | System Health
@@ -42,11 +42,11 @@ pub fn render(frame: &mut Frame, area: Rect, app: &AppState) {
 }
 
 // ---------------------------------------------------------------------------
-// 1. Top status bar — bordered box with title (Enchanter — LIVE — DEMO)
+// 1. Top status bar — bordered box with title (Beholder — LIVE — DEMO)
 //    LEFT-aligned and shortcuts RIGHT-aligned. The right-alignment here is
 //    one of two intentional exceptions to the global LTR rule (the other is
 //    the PLUGINS table's "Last seen" column) — both at explicit user ask.
-//    "Enchanter" renders in the djinn purple; rest dimmed.
+//    "Beholder" renders in the djinn purple; rest dimmed.
 // ---------------------------------------------------------------------------
 fn render_top_bar(frame: &mut Frame, area: Rect, app: &AppState) {
     if area.area() == 0 {
@@ -81,10 +81,10 @@ fn render_top_bar(frame: &mut Frame, area: Rect, app: &AppState) {
         widgets::pulse_color(base_color, app.tick, 2)
     };
 
-    // Build the title spans — purple "Enchanter", dim separators, pulsing mode.
+    // Build the title spans — purple "Beholder", dim separators, pulsing mode.
     let mut left_spans = vec![
         Span::styled(
-            "Enchanter",
+            "Beholder",
             Style::default()
                 .fg(theme::PLUGIN_DJINN)
                 .add_modifier(Modifier::BOLD),

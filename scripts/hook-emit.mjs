@@ -3,7 +3,7 @@
  *
  * Invoked by .git/hooks/{pre-commit,pre-push,post-commit} (installed by
  * scripts/init-hooks.ts). Packages the hook payload into an EnchantedEvent
- * and forwards to a running enchanter inspector via BusClient.
+ * and forwards to a running beholder inspector via BusClient.
  *
  *   <git-hook> ──▶ this script ──▶ BusClient ──▶ ws://127.0.0.1:3001/ws
  *
@@ -64,7 +64,7 @@ for (let i = 1; i < argv.length; i += 2) {
 // ---------------------------------------------------------------------------
 // Wire up the broadcaster — same defaults as mcp-wrap / watch.
 // ---------------------------------------------------------------------------
-const broadcaster = new BusClient(process.env.ENCHANTER_BUS_URL ?? DEFAULT_BROADCASTER_URL);
+const broadcaster = new BusClient(process.env.BEHOLDER_BUS_URL ?? DEFAULT_BROADCASTER_URL);
 broadcaster.connect();
 
 const correlationId = `hook-${randomUUID().slice(0, 8)}`;

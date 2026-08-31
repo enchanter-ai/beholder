@@ -2,7 +2,7 @@
 
    Wixie is the prompt-engineering meta-engine that companion-runs the
    research → craft → converge → harden → translate lifecycle. Today it
-   does NOT ship a runtime PluginAdapter against the Enchanter bus — it
+   does NOT ship a runtime PluginAdapter against the Beholder bus — it
    is a separate companion repo (https://github.com/enchanter-ai/wixie).
 
    This package reserves the `@enchanter-ai/plugin-wixie` name on the

@@ -1,4 +1,4 @@
-/* enchanter/src/plugins/gorgon.adapter.ts — implements architecture-spec
+/* beholder/src/plugins/gorgon.adapter.ts — implements architecture-spec
    phase_1.gorgon (cross-session snapshot + post-response refresh).
    Source refs: plugins/gorgon source (G3 PageRank, G1 Tarjan deferred to v0.3).
    v0.2: language-agnostic import-graph PageRank only.
