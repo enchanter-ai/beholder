@@ -76,11 +76,16 @@ Beholder's veto table ships **10 CVE-anchored patterns** in v0.6 — 5 shell-cla
 > **not** run `npm install beholder`. Build from source in this repo instead:
 
 ```bash
-git clone https://github.com/enchanter-ai/beholder.git
+gh repo clone enchanter-ai/beholder    # GitHub CLI — authenticates the private repo
 cd beholder
 npm install        # deps for this checkout
 npm run build      # tsc + copy assets -> dist/
 ```
+
+> No `gh`? Grab a source archive instead — `gh release download` if a release
+> is tagged, or **Code → Download ZIP** on the repo — then `cd` in and run the
+> same `npm install && npm run build`. (The repo is private and not on npm, so
+> plain `git clone` needs your credentials configured; `gh` handles that.)
 
 Requires Node 22+.
 
@@ -190,7 +195,26 @@ A thin per-request orchestrator owns the canonical request lifecycle. An in-proc
 
 Observability is the Rust terminal cockpit at [`inspector/`](inspector/) — a single binary that reads the runtime's JSONL event stream from stdin / file / socket and renders 10 live views (overview, plugins, events, security, cost, drift, codebase, replay, runtime totals, active tasks). The wire contract is documented at [`docs/event-schema.md`](docs/event-schema.md).
 
-Full architectural spec: produced by [Wixie](https://github.com/enchanter-ai/wixie).
+```mermaid
+flowchart TD
+    SDK["Your app → McpClient (SDK)"] --> ORCH
+    HOOK["Claude Code → PreToolUse hook"] --> VETO
+
+    subgraph rt["Beholder runtime (in-process)"]
+        ORCH["7-phase orchestrator<br/>anchor → trust-gate → pre-dispatch →<br/>dispatch → post-response → post-session → cross-session"]
+        VETO{"hydra veto core<br/>shared · CVE-anchored"}
+        BUS(("event bus"))
+        PLUGINS["9 plugins<br/>crow · djinn · emu · gorgon · hydra<br/>lich · naga · pech · sylph"]
+
+        ORCH -->|trust-gate| VETO
+        ORCH <-->|derived events| BUS
+        BUS <--> PLUGINS
+    end
+
+    VETO -->|critical hit| BLOCK["BLOCK — SecurityVetoError / permissionDecision: deny"]
+    VETO -->|clear| SRV[("MCP server — stdio / HTTP")]
+    BUS -->|JSONL bridge| INSP["Rust inspector — 10 live views"]
+```
 
 ## Streaming events to the inspector
 
