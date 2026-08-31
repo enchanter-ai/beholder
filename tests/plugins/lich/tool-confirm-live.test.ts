@@ -138,7 +138,10 @@ describe('runSandboxedToolCallLive — real-MCP-server replay', () => {
     expect(result.failed).toBe(true);
     if (result.failed) {
       expect(result.reason).toBe('timeout');
-      expect(result.elapsed_ms).toBeGreaterThanOrEqual(200);
+      // Timer granularity: a 200ms budget can be measured a hair under (e.g.
+      // 199ms) on a loaded CI runner. Allow a small tolerance — the intent is
+      // that the call waited ~the full budget rather than returning instantly.
+      expect(result.elapsed_ms).toBeGreaterThanOrEqual(190);
     }
   }, 4000);
 });
