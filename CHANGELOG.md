@@ -2,6 +2,17 @@
 
 All notable changes to Beholder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] — 2026-08-31
+
+Product rename to **Beholder** and a security refresh against the 2025-2026 MCP CVE wave. Test count: 408 → 414 / 7 todo / 0 fail across 44 files (TS); Rust cargo check + clippy `-D warnings` + tests clean on the ubuntu/windows/macos matrix.
+
+### Changed
+- **Renamed the product/CLI identity from Enchanter to Beholder.** Pure token rename across the tree (package name `enchanter` → `beholder`, `bin/enchanter.mjs` → `bin/beholder.mjs` and command `beholder inspect`, Rust crate `enchanter-inspector` → `beholder-inspector`, env vars `ENCHANTER_*` → `BEHOLDER_*`, cache path `~/.cache/enchanter` → `~/.cache/beholder`). The `enchanter-ai` GitHub org slug, the `enchanter.dev` schema domain, and the `The Enchanter Authors` copyright holder are deliberately left unchanged. No behavioral change.
+
+### Added
+- **MCP-2026 veto patterns** (`src/plugins/hydra/veto-core.mjs`) — the shared veto table grows from 5 shell-command hazards to 10, adding the MCP attack classes disclosed across the 2025-2026 CVE wave. Two are critical (block): `h-reverse-shell` (RCE callback) and `h-secret-file-exfil` (env/credential-file read — the egress tail of the lethal trifecta). Three are advisory (warn, never block — honest about their heuristic false-positive surface): `h-mcp-tool-poisoning` (hidden directives in tool descriptions/results — tool poisoning + line jumping), `h-mcp-cmd-injection` (CVE-2026-0755 / CVE-2026-0756, exec injection), and `h-mcp-intent-rce` (CVE-2026-35394, Mobile MCP `mobile_open_url` intent/USSD). Both enforcement paths (SDK orchestrator and auto-wired Claude Code hook) consume the same table, so the additions veto identically. New unit test `tests/security/mcp-2026-patterns.test.ts` covers all five.
+- **MCP threat model** (`docs/mcp-threat-model.md`) — maps Beholder's per-phase defenses and the 10 veto patterns onto the 2026 MCP threat landscape (the named attack classes, the NSA/CISA MCP security guidance, and the CSA/Ox "MCP by Design: RCE" note), with an explicit statement of what the veto does and does not catch.
+
 ## [0.5.0] — 2026-05-06
 
 Three v0.5 carry-overs from v0.4 landed; npm-publish ceremony for v0.4.0 still gated on operator authorization (NPM_TOKEN). Test count: 347 → 374 / 7 todo / 0 fail across 40 files (TS); Rust cargo check + tests clean.

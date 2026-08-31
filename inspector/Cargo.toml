@@ -1,6 +1,6 @@
 [package]
 name = "beholder-inspector"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 default-run = "beholder"
 description = "Terminal-first TUI cockpit for the Beholder AI runtime"
