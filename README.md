@@ -9,7 +9,9 @@
   </a>
 </p>
 
-Enchanter is a TypeScript MCP client SDK with a hybrid orchestrator and 10 capability plugins, plus a Rust terminal cockpit ([`inspector/`](inspector/)) for live observability. Every outbound tool call rides a 7-phase request lifecycle, runs through an in-process event bus, and lets specialized plugins (trust scoring, drift detection, security veto, code review, structural fingerprinting, cost attribution, git workflow) observe, modify, or block before the request leaves your process — **when you drive traffic through the SDK's `McpClient` orchestrator** (see Quickstart below). The auto-wired Claude Code integration (`postinstall` hook, below) is observability-only: it emits telemetry for the inspector and never blocks a tool call.
+Enchanter is a TypeScript MCP client SDK with a hybrid orchestrator and 10 capability plugins, plus a Rust terminal cockpit ([`inspector/`](inspector/)) for live observability. Every outbound tool call rides a 7-phase request lifecycle, runs through an in-process event bus, and lets specialized plugins (trust scoring, drift detection, security veto, code review, structural fingerprinting, cost attribution, git workflow) observe, modify, or block before the request leaves your process.
+
+The security veto fires on **both** paths. When you drive traffic through the SDK's `McpClient` orchestrator (see Quickstart), a critical CVE-anchored hit becomes a `SecurityVetoError` and fails the request closed. And the auto-wired Claude Code integration (`postinstall` hook, below) now runs the **same** hydra veto core on `PreToolUse` and **blocks** a matching tool call via Claude Code's `permissionDecision: "deny"` contract — so the shipped default product enforces the veto, not just the SDK path. The pattern table and block/warn decision live in one shared module ([`src/plugins/hydra/veto-core.mjs`](src/plugins/hydra/veto-core.mjs)) consumed by both. Enforcement fails **open**: an internal hook error allows the call (and logs it) rather than wedging your session; only a genuine critical veto denies.
 
 ## Install
 
@@ -29,11 +31,14 @@ Requires Node 22+.
 > Note: `npm install` runs a `postinstall` hook installer
 > (`scripts/hooks/install-hooks.mjs`) that writes entries into
 > `~/.claude/settings.json`. Run `npm run uninstall-hooks` to remove them.
-> These hooks are **advisory only** — the emitter
-> (`scripts/hooks/claude-code-emit.mjs`) always exits 0, so it feeds the
-> inspector but cannot veto or block a Claude Code tool call. The blocking
-> security veto only fires when you use the SDK's `McpClient` orchestrator
-> directly (see Quickstart).
+> The emitter (`scripts/hooks/claude-code-emit.mjs`) streams telemetry to the
+> inspector **and enforces the security veto**: on `PreToolUse` it runs the
+> shared hydra veto core and, on a critical CVE-anchored match, blocks the
+> tool call via Claude Code's `permissionDecision: "deny"` contract. It never
+> uses a non-zero exit to block, and it fails **open** — an internal error
+> allows the call (logged to a sibling `.err` file) so a hook bug can't wedge
+> your session. Advisory (high/medium) hits are recorded as telemetry, not
+> blocked.
 
 ## Try it
 
@@ -151,7 +156,7 @@ node scripts/hooks/install-hooks.mjs
 enchanter inspect --tail ~/.cache/enchanter/claude-code.jsonl
 ```
 
-Idempotent. Edits `~/.claude/settings.json` only. Advisory-only — these hooks stream telemetry to the inspector and never block a tool call (the hook emitter always exits 0). See [`docs/claude-code-integration.md`](docs/claude-code-integration.md) for the full hook → wire-event mapping, uninstall, and privacy notes.
+Idempotent. Edits `~/.claude/settings.json` only. These hooks stream telemetry to the inspector **and enforce the hydra security veto** on `PreToolUse` — a critical CVE-anchored match blocks the call via Claude Code's `permissionDecision: "deny"` contract (fail-open on internal error; never blocks via a non-zero exit). See [`docs/claude-code-integration.md`](docs/claude-code-integration.md) for the full hook → wire-event mapping, the veto contract, uninstall, and privacy notes.
 
 ## Status
 

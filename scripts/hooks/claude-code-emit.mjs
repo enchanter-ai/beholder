@@ -13,12 +13,29 @@
  *
  * Wire schema: docs/event-schema.md.
  *
+ * SECURITY VETO (T2): on PreToolUse this hook now runs the SAME hydra veto
+ * core the SDK path uses (src/plugins/hydra/veto-core.mjs). When a CRITICAL
+ * CVE-anchored pattern matches the tool call, the hook DENIES the call via
+ * Claude Code's PreToolUse `permissionDecision: "deny"` JSON contract — so
+ * the shipped, auto-wired default product actually enforces the veto, not
+ * just the unused SDK path. This is the one deliberate exception to the
+ * "never writes to stdout" rule below: the deny JSON is the only stdout
+ * write, and only on an actual block.
+ *
+ * FAIL-OPEN: enforcement never wedges the user. A crash anywhere in the hook
+ * (including inside the veto core) falls open — the tool call is ALLOWED and
+ * the error is logged to the sibling .err file. Only a genuine critical veto
+ * denies. Advisory (high/medium) hits are recorded as telemetry, not blocked.
+ *
  * Contract:
- *   - Stdlib-only (Node 22+). No deps. No build step.
- *   - Never throws. Never writes to stdout (Claude Code captures stdout
- *     into its own message stream). Errors → sibling .err file.
- *   - Always exits 0 — a non-zero exit is treated by Claude Code as a
- *     hook failure and surfaces a user-visible error.
+ *   - Stdlib-only (Node 22+). No deps. No build step. (The veto core is
+ *     plain ESM JS imported by relative path — no dependency, no build.)
+ *   - Never throws. Writes to stdout ONLY to emit a PreToolUse deny decision;
+ *     otherwise stays silent (Claude Code captures stdout into its own
+ *     message stream). Errors → sibling .err file.
+ *   - Always exits 0 — a non-zero exit is treated by Claude Code as a hook
+ *     failure. Blocking is expressed via the deny JSON on stdout, not a
+ *     non-zero exit, so a hook bug can never wedge the session.
  *   - 16 KB per-line cap on emitted events (well under the 1 MiB the
  *     inspector parser tolerates) — tool args + tool outputs are
  *     truncated. Privacy: nothing leaves the local machine.
@@ -31,6 +48,13 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
+
+// Shared hydra veto core — the SINGLE source of truth for the CVE pattern
+// table and the block/warn decision, imported directly (plain ESM JS, no
+// build) so this stdlib-only hook enforces the exact same veto as the SDK
+// path (src/plugins/hydra.adapter.ts). Resolved relative to this file so it
+// works from a source checkout and from the published package (src/ ships).
+import { decideVeto } from '../../src/plugins/hydra/veto-core.mjs';
 
 // --------------------------------------------------------------------------
 // Paths — same algorithm as inspector/src/main.rs::log_path():
@@ -346,51 +370,10 @@ function extractFilePath(toolName, toolInput) {
   return null;
 }
 
-// ----------------------------------------------------------------------------
-// Hydra CWE pattern scan — runs over Bash commands at PreToolUse. Patterns
-// follow the same shape as src/plugins/hydra.adapter.ts so the cockpit's
-// security counter ticks for the same hazards in real Claude Code work.
-// ----------------------------------------------------------------------------
-const HYDRA_PATTERNS = [
-  {
-    id: 'cwe-78-rm-rf-root',
-    cve_anchor: 'CWE-78: OS Command Injection',
-    severity: 'critical',
-    re: /\brm\s+(-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*|-[a-zA-Z]*f[a-zA-Z]*r[a-zA-Z]*|-rf|-fr)\s+(\/(\s|$|\*)|~|\$HOME|\$\{HOME\})/,
-  },
-  {
-    id: 'cwe-94-curl-pipe-shell',
-    cve_anchor: 'CWE-94: Code Injection',
-    severity: 'high',
-    re: /\b(curl|wget)\b[^|]*\|\s*(sh|bash|zsh|fish)\b/,
-  },
-  {
-    id: 'cwe-200-private-key-read',
-    cve_anchor: 'CWE-200: Information Exposure',
-    severity: 'high',
-    re: /\b(cat|less|more|head|tail|type)\b[^;|&]*\b(\.ssh\/id_(rsa|ed25519|ecdsa|dsa)|\.aws\/credentials|\.gnupg\/.+\.key)\b/,
-  },
-  {
-    id: 'cwe-732-force-push',
-    cve_anchor: 'CWE-732: Incorrect Permission Assignment',
-    severity: 'medium',
-    re: /\bgit\s+push\s+(-[a-zA-Z]*f|--force|--force-with-lease)\b/,
-  },
-  {
-    id: 'cwe-732-chmod-777',
-    cve_anchor: 'CWE-732: Incorrect Permission Assignment',
-    severity: 'medium',
-    re: /\bchmod\s+(-R\s+)?(777|666|a\+rwx|o\+rwx)\b/,
-  },
-];
-
-function scanHydra(command) {
-  if (typeof command !== 'string' || command.length === 0) return null;
-  for (const p of HYDRA_PATTERNS) {
-    if (p.re.test(command)) return p;
-  }
-  return null;
-}
+// Hydra CVE pattern scanning + the block/warn decision live in the shared
+// veto core (imported as `decideVeto` at the top of this file) — the same
+// module the SDK path uses. See the PreToolUse case for how a critical hit
+// is turned into a Claude Code deny.
 
 // Detect test-runner invocations in Bash commands.
 const TEST_CMD_RE = /\b(npm\s+(run\s+)?test|pnpm\s+(run\s+)?test|yarn\s+(run\s+)?test|jest|vitest|pytest|cargo\s+test|go\s+test|mvn\s+test|gradle\s+test|rspec|mocha|playwright)\b/;
@@ -573,6 +556,10 @@ function emitForHook(eventName, payload) {
     return r;
   };
 
+  // Optional hook decision returned to main(). Currently only PreToolUse sets
+  // it, to a { deny: true, reason } object when the veto core blocks the call.
+  let hookResult;
+
   switch (eventName) {
     case 'SessionStart': {
       const r = base({ type: 'session.started' });
@@ -656,26 +643,49 @@ function emitForHook(eventName, payload) {
         }),
       );
 
-      // Hydra CWE scan — Bash only. Emits hydra.veto.fired on a hit; the
-      // inspector's apply_unknown branch increments security_incidents_session
-      // and bumps the hydra plugin's call counter.
-      if (toolName === 'Bash' && toolInput && typeof toolInput === 'object') {
-        const cmd = typeof toolInput.command === 'string' ? toolInput.command : '';
-        const hit = scanHydra(cmd);
-        if (hit) {
-          appendEvent(
-            base({
-              type: 'hydra.veto.fired',
-              plugin: 'hydra',
-              phase: 'trust-gate',
-              severity: hit.severity,
-              pattern_id: hit.id,
-              cve_anchor: hit.cve_anchor,
-              tool: toolName,
-              payload: { command: truncStr(cmd) },
-            }),
-          );
+      // Hydra CVE veto — runs the SHARED veto core over every tool call (not
+      // just Bash). A critical hit BLOCKS the call (see the deny wiring in
+      // main()); high/medium hits are advisory. Either way we emit
+      // hydra.veto.fired so the inspector's apply_unknown branch increments
+      // security_incidents_session and bumps the hydra plugin's call counter.
+      //
+      // FAIL-OPEN: any throw inside the veto core is swallowed and logged —
+      // an internal error must never block a real tool call.
+      let vetoDecision = null;
+      try {
+        // Fault-injection seam (tests only; never set in production) — proves
+        // the fail-open guarantee: an internal error must ALLOW the call.
+        if (process.env.ENCHANTER_VETO_SELFTEST_THROW === '1') {
+          throw new Error('selftest: forced veto-core failure');
         }
+        const cmd =
+          toolInput && typeof toolInput === 'object' && typeof toolInput.command === 'string'
+            ? toolInput.command
+            : undefined;
+        vetoDecision = decideVeto({ tool: toolName, args: cmd, raw: toolInput });
+      } catch (err) {
+        logError('veto-core failed (fail-open: allowing tool call)', err);
+        vetoDecision = null;
+      }
+      if (vetoDecision && vetoDecision.hits.length > 0) {
+        const top = vetoDecision.blocking ?? vetoDecision.hits[0];
+        const cmd =
+          toolInput && typeof toolInput === 'object' && typeof toolInput.command === 'string'
+            ? toolInput.command
+            : '';
+        appendEvent(
+          base({
+            type: 'hydra.veto.fired',
+            plugin: 'hydra',
+            phase: 'trust-gate',
+            severity: top.severity,
+            pattern_id: top.id,
+            cve_anchor: top.cve_anchor,
+            tool: toolName,
+            blocked: vetoDecision.block,
+            payload: { command: truncStr(cmd) },
+          }),
+        );
       }
 
       // Derived plugin events ----------------------------------------------
@@ -711,6 +721,18 @@ function emitForHook(eventName, payload) {
       }
 
       writeState(state);
+
+      // Surface a deny decision to main() when the veto core blocked. main()
+      // translates it into Claude Code's PreToolUse deny JSON on stdout.
+      if (vetoDecision && vetoDecision.block && vetoDecision.blocking) {
+        const b = vetoDecision.blocking;
+        hookResult = {
+          deny: true,
+          reason:
+            `enchanter/hydra security veto: ${b.id} (${b.cve_anchor}) — ${b.rationale}. ` +
+            `Blocked by the auto-wired PreToolUse hook.`,
+        };
+      }
       break;
     }
 
@@ -993,6 +1015,30 @@ function emitForHook(eventName, payload) {
       break;
     }
   }
+
+  return hookResult;
+}
+
+// --------------------------------------------------------------------------
+// Emit a Claude Code PreToolUse deny on stdout. This is the ONLY stdout write
+// the hook ever performs, and only when the veto core blocked a call. Using
+// the JSON `permissionDecision: "deny"` contract (with exit 0) blocks the
+// tool while a hook bug can still never wedge the session via a bad exit code.
+// --------------------------------------------------------------------------
+function writeDenyDecision(reason) {
+  try {
+    const out = {
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'deny',
+        permissionDecisionReason: reason,
+      },
+    };
+    process.stdout.write(JSON.stringify(out) + '\n');
+  } catch (err) {
+    // If we somehow can't emit the deny, fail OPEN (log, don't crash).
+    logError('failed to emit deny decision (fail-open)', err);
+  }
 }
 
 // --------------------------------------------------------------------------
@@ -1007,8 +1053,12 @@ function emitForHook(eventName, payload) {
       return;
     }
     const payload = await readStdinJson();
-    emitForHook(eventName, payload || {});
+    const result = emitForHook(eventName, payload || {});
+    if (result && result.deny) {
+      writeDenyDecision(result.reason);
+    }
   } catch (err) {
+    // Fail-open: any unhandled error allows the tool call (no deny emitted).
     logError('unhandled', err);
   } finally {
     // Always 0 — never break the caller.

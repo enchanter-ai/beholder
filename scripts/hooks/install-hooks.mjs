@@ -6,6 +6,11 @@
  * invokes scripts/hooks/claude-code-emit.mjs on each session lifecycle
  * event. Idempotent: re-running won't duplicate entries.
  *
+ * The PreToolUse entry is load-bearing: the emitter runs the shared hydra
+ * veto core there and BLOCKS a critical CVE-anchored tool call via Claude
+ * Code's `permissionDecision: "deny"` contract (fail-open on internal
+ * error). The other events are observability-only telemetry.
+ *
  *   node scripts/hooks/install-hooks.mjs              # install
  *   node scripts/hooks/install-hooks.mjs --uninstall  # remove our entries
  *

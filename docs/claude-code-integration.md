@@ -101,11 +101,38 @@ strings contain `enchanter:claude-code-emit`.
 - Tool arguments and outputs are truncated to fit a 16 KB per-event cap.
 - The emitter writes to a local file under your cache dir. Nothing is sent
   over the network.
-- The emitter never writes to stdout (Claude Code captures stdout into its
-  own message stream); diagnostic errors land in a sibling `claude-code.err`
-  file in the same cache dir.
-- The emitter always exits 0 — a hook failure can't block your Claude Code
-  session.
+- The emitter writes to stdout **only** to emit a `PreToolUse` deny decision
+  (see the Security veto section below); otherwise it stays silent (Claude
+  Code captures stdout into its own message stream). Diagnostic errors land in
+  a sibling `claude-code.err` file in the same cache dir.
+- The emitter always exits 0 — blocking is expressed via the deny JSON, not a
+  non-zero exit, so a hook failure can't wedge your Claude Code session.
+
+## Security veto (enforced)
+
+On `PreToolUse` the emitter runs the shared hydra veto core
+(`src/plugins/hydra/veto-core.mjs`) — the **same** CVE-anchored pattern table
+and block/warn decision the SDK's `McpClient` orchestrator uses. This is the
+one place the veto logic lives; there is no second copy to drift.
+
+- A **critical** hit (e.g. `rm -rf /`, `curl … | sh`, SSH private-key read,
+  passwordless-sudo escalation) **blocks** the tool call. The hook prints
+  Claude Code's advanced hook JSON to stdout:
+
+  ```json
+  { "hookSpecificOutput": {
+      "hookEventName": "PreToolUse",
+      "permissionDecision": "deny",
+      "permissionDecisionReason": "enchanter/hydra security veto: h-rm-rf-root …" } }
+  ```
+
+  `permissionDecision` is one of `allow` / `deny` / `ask` — the hook only ever
+  emits `deny`, and only on a critical match.
+- **high/medium** hits are recorded as `hydra.veto.fired` telemetry (for the
+  inspector's security counter) but do **not** block.
+- **Fail-open:** any internal error in the veto core — or anywhere in the hook
+  — allows the call and logs to `claude-code.err`. Enforcement never wedges
+  the user; only a genuine critical veto denies.
 
 ## Troubleshooting
 
