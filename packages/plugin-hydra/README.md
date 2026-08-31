@@ -1,6 +1,6 @@
 # @enchanter-ai/plugin-hydra
 
-Real-time security interception with 1844 CVE-mapped patterns — the **Hydra** adapter for [Beholder](https://github.com/enchanter-ai/beholder).
+Real-time CVE-anchored security interception — the **Hydra** adapter for [Beholder](https://github.com/enchanter-ai/beholder).
 
 Hydra runs in the `trust-gate` and `post-response` lifecycle phases. It vetos calls matching destructive-op patterns, masks secrets (AWS keys, bearer tokens, PEM blocks) in tool results, and emits findings tagged with the matched CVE ID.
 
