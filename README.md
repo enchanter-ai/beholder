@@ -13,6 +13,8 @@ Beholder is a TypeScript MCP client SDK with a hybrid orchestrator and 10 capabi
 
 The security veto fires on **both** paths. When you drive traffic through the SDK's `McpClient` orchestrator (see Quickstart), a critical CVE-anchored hit becomes a `SecurityVetoError` and fails the request closed. And the auto-wired Claude Code integration (`postinstall` hook, below) now runs the **same** hydra veto core on `PreToolUse` and **blocks** a matching tool call via Claude Code's `permissionDecision: "deny"` contract — so the shipped default product enforces the veto, not just the SDK path. The pattern table and block/warn decision live in one shared module ([`src/plugins/hydra/veto-core.mjs`](src/plugins/hydra/veto-core.mjs)) consumed by both. Enforcement fails **open**: an internal hook error allows the call (and logs it) rather than wedging your session; only a genuine critical veto denies.
 
+MCP became a live attack surface in 2026 — 40+ CVEs against MCP implementations in the first four months of the year, plus dedicated NSA/CISA and Cloud Security Alliance guidance. An MCP client is the natural place to enforce: it sees every tool registration, request, and response before the model or the user acts. Beholder's veto table ships **10 CVE-anchored patterns** in v0.6 — 5 shell-class hazards plus 5 MCP-2026 classes (reverse shell, credential-file exfil, tool poisoning / line jumping, exec injection, Android-intent RCE). [`docs/mcp-threat-model.md`](docs/mcp-threat-model.md) maps every defense, and its residual gaps, onto that landscape.
+
 ## Install
 
 > **Not published to npm.** This package is `private`, and the bare name
@@ -142,7 +144,7 @@ The runtime supervisor (`scripts/run.ts`) ships every bus event as JSONL when `B
 ```bash
 BEHOLDER_BRIDGE=stdout npx tsx scripts/run.ts -- npm test | beholder           # pipe directly into the Rust TUI
 BEHOLDER_BRIDGE=tcp://127.0.0.1:7878 npx tsx scripts/run.ts -- npm test         # for an inspector listening on a socket
-BEHOLDER_BRIDGE=file:./run-2026-05-05.jsonl npx tsx scripts/run.ts -- npm test  # capture-to-replay
+BEHOLDER_BRIDGE=file:./run.jsonl npx tsx scripts/run.ts -- npm test              # capture-to-replay
 ```
 
 When `stdout` is selected, the supervisor re-routes the wrapped child's stdout to stderr so the JSONL wire stays uncorrupted.
@@ -160,7 +162,7 @@ Idempotent. Edits `~/.claude/settings.json` only. These hooks stream telemetry t
 
 ## Status
 
-Current production version: **v0.5.0**. Every roadmap item from `0.2` through `0.5` is shipped — see [CHANGELOG.md](CHANGELOG.md) for per-version detail. Next: HTTP transport inside the sandbox worker, npm-publish ceremony for the `@enchanter-ai/plugin-*` packages, and auto-reconnect for the bidirectional control socket.
+Current production version: **v0.6.0**. v0.6 renames the product to Beholder and refreshes the hydra veto against the 2025–2026 MCP CVE wave (10 CVE-anchored patterns; see [`docs/mcp-threat-model.md`](docs/mcp-threat-model.md)). Every roadmap item from `0.2` through `0.5` is shipped — see [CHANGELOG.md](CHANGELOG.md) for per-version detail. Next: HTTP transport inside the sandbox worker, npm-publish ceremony for the `@enchanter-ai/plugin-*` packages, and auto-reconnect for the bidirectional control socket.
 
 ## Contributing
 
