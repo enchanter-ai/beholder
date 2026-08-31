@@ -74,7 +74,8 @@ describe('runSandboxedToolCallLive — runMode:worker (fork + stdio fixture)', (
     expect(result.failed).toBe(true);
     if (result.failed) {
       expect(result.reason).toBe('timeout');
-      expect(result.elapsed_ms).toBeGreaterThanOrEqual(300);
+      // Small tolerance for timer granularity on loaded CI runners.
+      expect(result.elapsed_ms).toBeGreaterThanOrEqual(290);
     }
   }, 4000);
 

@@ -58,7 +58,8 @@ describe('runSandboxedReview — worker isolation', () => {
     expect(result.failed).toBe(true);
     if (result.failed) {
       expect(result.reason).toBe('timeout');
-      expect(result.elapsed_ms).toBeGreaterThanOrEqual(250);
+      // Small tolerance for timer granularity on loaded CI runners.
+      expect(result.elapsed_ms).toBeGreaterThanOrEqual(240);
     }
     // Generous outer cap so vitest's 5s timeout never trips.
   }, 4000);
