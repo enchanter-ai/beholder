@@ -10,15 +10,64 @@
 
 <p align="center">
   <a href="inspector/">
-    <img src="inspector/docs/assets/hero.png" alt="Beholder Inspector — terminal cockpit for the Beholder AI runtime" width="1280">
+    <img src="inspector/docs/assets/hero.png" alt="Beholder Inspector — terminal cockpit for the Beholder MCP runtime" width="1280">
   </a>
 </p>
 
-Beholder is a TypeScript MCP client SDK with a hybrid orchestrator and 10 capability plugins, plus a Rust terminal cockpit ([`inspector/`](inspector/)) for live observability. Every outbound tool call rides a 7-phase request lifecycle, runs through an in-process event bus, and lets specialized plugins (trust scoring, drift detection, security veto, code review, structural fingerprinting, cost attribution, git workflow) observe, modify, or block before the request leaves your process.
+Beholder is a TypeScript MCP client SDK with a hybrid orchestrator and nine capability plugins, plus a Rust terminal cockpit ([`inspector/`](inspector/)) for live observability. Every outbound tool call rides a 7-phase request lifecycle, runs through an in-process event bus, and lets specialized plugins (trust scoring, drift detection, security veto, code review, structural fingerprinting, cost attribution, git workflow) observe, modify, or block before the request leaves your process.
 
-The security veto fires on **both** paths. When you drive traffic through the SDK's `McpClient` orchestrator (see Quickstart), a critical CVE-anchored hit becomes a `SecurityVetoError` and fails the request closed. And the auto-wired Claude Code integration (`postinstall` hook, below) now runs the **same** hydra veto core on `PreToolUse` and **blocks** a matching tool call via Claude Code's `permissionDecision: "deny"` contract — so the shipped default product enforces the veto, not just the SDK path. The pattern table and block/warn decision live in one shared module ([`src/plugins/hydra/veto-core.mjs`](src/plugins/hydra/veto-core.mjs)) consumed by both. Enforcement fails **open**: an internal hook error allows the call (and logs it) rather than wedging your session; only a genuine critical veto denies.
+## TL;DR
 
-MCP became a live attack surface in 2026 — 40+ CVEs against MCP implementations in the first four months of the year, plus dedicated NSA/CISA and Cloud Security Alliance guidance. An MCP client is the natural place to enforce: it sees every tool registration, request, and response before the model or the user acts. Beholder's veto table ships **10 CVE-anchored patterns** in v0.6 — 5 shell-class hazards plus 5 MCP-2026 classes (reverse shell, credential-file exfil, tool poisoning / line jumping, exec injection, Android-intent RCE). [`docs/mcp-threat-model.md`](docs/mcp-threat-model.md) maps every defense, and its residual gaps, onto that landscape.
+**In plain English:** Your agent calls tools you didn't write, exposed by servers you didn't audit. Beholder sits in front of every call — it watches the whole stream live and kills the dangerous ones before they run. Point it at the SDK or at your real Claude Code sessions; either way the same security veto is enforcing, not just observing.
+
+**Technically:** a thin per-request orchestrator drives a 7-phase lifecycle (`anchor → trust-gate → pre-dispatch → dispatch → post-response → post-session → cross-session`); plugin findings ride an in-process pub/sub bus with `correlation_id` propagation. The hydra veto is CVE-anchored and shared byte-for-byte between two enforcement paths — the SDK `McpClient` (critical hit → `SecurityVetoError`, fails closed) and the auto-wired Claude Code `PreToolUse` hook (critical hit → `permissionDecision: "deny"`). Enforcement fails **open** on internal error so a hook bug can't wedge your session. A single Rust binary reads the runtime's JSONL event stream and renders ten live views.
+
+## Origin
+
+**Beholder** takes its name from the many-eyed aberration of tabletop lore — a floating orb ringed by eyestalks, each firing a different ray, above a central eye whose gaze suppresses magic itself. The metaphor is exact: the runtime watches every tool call through many eyes at once — one lens per plugin, one live view per concern — while the central eye, the hydra veto, is the anti-magic gaze that shuts a dangerous call down before it resolves.
+
+The question this plugin answers: *What is my agent actually doing — and should it?*
+
+## Who this is for
+
+- Teams running MCP servers or agents against untrusted tools, who want the **client** to be the enforcement point rather than trusting each server.
+- Security engineers who need a policy-enforcement point (PEP) that sees every tool registration, request, and response, with an honest fail-open/fail-closed contract.
+- Claude Code users who want their real session lifecycle (tool calls, durations, costs, phases) streamed to a live cockpit — with a veto enforced on their own machine.
+
+Not for:
+
+- A single trusted local server with no untrusted tools — the 7-phase orchestrator is overhead you don't need; talk MCP directly.
+- Anyone wanting a hosted SaaS control plane — Beholder is in-process and local by design.
+
+## Contents
+
+- [How It Works](#how-it-works)
+- [Security & the 2026 MCP threat surface](#security--the-2026-mcp-threat-surface)
+- [Install](#install)
+- [Quickstart](#quickstart)
+- [What's in the box](#whats-in-the-box)
+- [The plugins](#the-plugins)
+- [Architecture](#architecture)
+- [Streaming events to the inspector](#streaming-events-to-the-inspector)
+- [Connect to your real Claude Code work](#connect-to-your-real-claude-code-work)
+- [Status](#status)
+- [Role in the ecosystem](#role-in-the-ecosystem)
+- [Contributing](#contributing)
+- [License](#license)
+
+## How It Works
+
+Beholder doesn't proxy tool calls blindly — it **arbitrates** them. Every outbound call is anchored to the session's intent, gated for trust, scanned for CVE-anchored hazards, dispatched, and then post-processed for cost, drift, and secrets, with each stage emitting derived events onto the bus.
+
+The security veto fires on **both** paths. When you drive traffic through the SDK's `McpClient` orchestrator (see [Quickstart](#quickstart)), a critical CVE-anchored hit becomes a `SecurityVetoError` and fails the request closed. And the auto-wired Claude Code integration (`postinstall` hook, below) runs the **same** hydra veto core on `PreToolUse` and **blocks** a matching tool call via Claude Code's `permissionDecision: "deny"` contract — so the shipped default product enforces the veto, not just the SDK path. The pattern table and the block/warn decision live in one shared module ([`src/plugins/hydra/veto-core.mjs`](src/plugins/hydra/veto-core.mjs)) consumed by both. Enforcement fails **open**: an internal hook error allows the call (and logs it) rather than wedging your session; only a genuine critical veto denies.
+
+Observability is a single Rust binary at [`inspector/`](inspector/) that reads the JSONL event stream from stdin, a file, or a socket and renders ten live views. No permission prompts, no manual polling — you describe the wiring once and the event stream does the rest.
+
+## Security & the 2026 MCP threat surface
+
+MCP became a live attack surface in 2026 — 40+ CVEs against MCP implementations in the first four months of the year, plus dedicated NSA/CISA and Cloud Security Alliance guidance. An MCP client is the natural place to enforce: it sees every tool registration, request, and response before the model or the user acts.
+
+Beholder's veto table ships **10 CVE-anchored patterns** in v0.6 — 5 shell-class hazards plus 5 MCP-2026 classes (reverse shell, credential-file exfil, tool poisoning / line jumping, exec injection, Android-intent RCE). Two of the MCP additions block; three are advisory (warn, never block) and honest about their heuristic false-positive surface. [`docs/mcp-threat-model.md`](docs/mcp-threat-model.md) maps every defense — the veto, the schema-digest pin, the trust-pin, OAuth audience binding, TLS pinning, and the human control channel — onto the named 2026 threat classes, and states plainly what Beholder does **not** catch.
 
 ## Install
 
@@ -47,7 +96,7 @@ Requires Node 22+.
 > your session. Advisory (high/medium) hits are recorded as telemetry, not
 > blocked.
 
-## Try it
+### Try it
 
 ```bash
 # From this repo (not an npm package — see Install above).
@@ -84,7 +133,7 @@ const transport = new StdioTransport(server.stdout!, server.stdin!);
 const client = new McpClient({
   serverId: 'fs',
   transport,
-  plugins: [hydraAdapter, pechAdapter /* + 8 more */],
+  plugins: [hydraAdapter, pechAdapter /* + 7 more */],
 });
 
 await client.initialize('my-app', '1.0.0');
@@ -108,16 +157,17 @@ const result = await client.callTool('read_file', { path: 'config.txt' });
 | Full trust-pin (SHA-256 over cmd + args + url + schemaDigests + binaryDigest + envAllowlist) | ✓ |
 | Namespace registry with SHA-256 schema-digest pin (MCPoison defense) | ✓ |
 | Tool name collision rejection | ✓ |
+| CVE-anchored security veto (10 patterns, shared SDK + Claude Code hook) | ✓ |
 | JSONL event bridge (runtime → inspector wire contract; stdout / file / TCP sinks) | ✓ |
 | Bidirectional control channel (inspector approve/veto into the trust-gate, fail-closed) | ✓ |
 | Rust terminal cockpit ([`inspector/`](inspector/)) — 10 live views over the JSONL stream | ✓ |
-| 10 plugin adapters (in-tree) | ✓ |
+| 9 runtime plugin adapters (in-tree) | ✓ |
 | Independently installable `@enchanter-ai/plugin-*` packages (workspace) | ✓ |
 | Live integration tested against `@modelcontextprotocol/server-filesystem` | ✓ |
 
-## The 10 plugins
+## The plugins
 
-Each plugin is its own repo under [github.com/enchanter-ai](https://github.com/enchanter-ai/). The TypeScript adapters in this SDK (`src/plugins/*.adapter.ts`) port the algorithms; the source repos hold the original Python implementations + Claude Code skills.
+Nine runtime adapters, plus `schematic` — a non-runtime scaffold template. Each plugin is its own repo under [github.com/enchanter-ai](https://github.com/enchanter-ai/): the TypeScript adapters in this SDK (`src/plugins/*.adapter.ts`) port the algorithms; the source repos hold the original Python implementations + Claude Code skills.
 
 | Plugin | Lifecycle phase | Role | Source |
 |---|---|---|---|
@@ -125,7 +175,7 @@ Each plugin is its own repo under [github.com/enchanter-ai](https://github.com/e
 | **djinn** | anchor + post-session | Intent anchoring + drift detection across `/compact` | [enchanter-ai/djinn](https://github.com/enchanter-ai/djinn) |
 | **emu** | pre-dispatch + post-response | Token economy monitor + ±CI runway forecast | [enchanter-ai/emu](https://github.com/enchanter-ai/emu) |
 | **gorgon** | cross-session + post-response | Codebase structural intelligence (PageRank hotspots) | [enchanter-ai/gorgon](https://github.com/enchanter-ai/gorgon) |
-| **hydra** | trust-gate + post-response | Real-time security interception (1844 CVE-mapped patterns) | [enchanter-ai/hydra](https://github.com/enchanter-ai/hydra) |
+| **hydra** | trust-gate + post-response | Real-time security interception (CVE-anchored veto; 10 patterns shipped in-tree) | [enchanter-ai/hydra](https://github.com/enchanter-ai/hydra) |
 | **lich** | post-response | Code review with sandboxed confirmation + Bayesian preference | [enchanter-ai/lich](https://github.com/enchanter-ai/lich) |
 | **naga** | trust-gate + post-response + post-session | Structural replication (AST + TF-IDF + naming convention) | [enchanter-ai/naga](https://github.com/enchanter-ai/naga) |
 | **pech** | post-response | Cost attribution ledger + budget thresholds | [enchanter-ai/pech](https://github.com/enchanter-ai/pech) |
@@ -167,7 +217,13 @@ Idempotent. Edits `~/.claude/settings.json` only. These hooks stream telemetry t
 
 ## Status
 
-Current production version: **v0.6.0**. v0.6 renames the product to Beholder and refreshes the hydra veto against the 2025–2026 MCP CVE wave (10 CVE-anchored patterns; see [`docs/mcp-threat-model.md`](docs/mcp-threat-model.md)). Every roadmap item from `0.2` through `0.5` is shipped — see [CHANGELOG.md](CHANGELOG.md) for per-version detail. Next: HTTP transport inside the sandbox worker, npm-publish ceremony for the `@enchanter-ai/plugin-*` packages, and auto-reconnect for the bidirectional control socket.
+Current version: **v0.6.0**. v0.6 renames the product to Beholder and refreshes the hydra veto against the 2025–2026 MCP CVE wave (10 CVE-anchored patterns; see [`docs/mcp-threat-model.md`](docs/mcp-threat-model.md)). The 0.2–0.5 roadmap milestones have shipped — see [CHANGELOG.md](CHANGELOG.md) for per-version detail; a few v0.3-era refinements remain marked in-code as `TODO` (deeper gorgon SCC/AST, lich M5 sandbox depth, pech EMA/Z-score). Next: HTTP transport inside the sandbox worker, npm-publish ceremony for the `@enchanter-ai/plugin-*` packages, and auto-reconnect for the bidirectional control socket.
+
+## Role in the ecosystem
+
+Beholder is the **runtime observability and enforcement layer** of the @enchanter-ai stack — it watches what a model actually does at tool-call time and stops what it shouldn't. It does not engineer prompts (that is [Wixie](https://github.com/enchanter-ai/wixie)'s lane, which produced Beholder's architecture spec); it consumes the ecosystem's plugin algorithms — crow's trust scoring, hydra's CVE veto, pech's cost ledger, and the rest — as in-tree adapters and renders their findings through one lifecycle and one cockpit.
+
+Upstream, each plugin is developed as its own repo; Beholder ports the algorithm and honors the shared behavioral modules every plugin obeys. Downstream, the inspector is the single surface where trust, drift, cost, security, and structure are read together, live.
 
 ## Contributing
 
