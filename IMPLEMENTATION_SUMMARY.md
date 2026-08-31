@@ -1,5 +1,10 @@
 # Beholder v0.2 — Implementation Summary
 
+> **Historical milestone document.** This captures the v0.1 → v0.2 delta as of
+> 2026-04-27. The current version is **v0.6.0** — see [CHANGELOG.md](CHANGELOG.md)
+> for everything shipped since, including the Beholder rename and the MCP-2026
+> security refresh. Kept for provenance; not a description of the current build.
+
 **Generated:** 2026-04-27
 **Architecture spec:** `wixie/prompts/mcp-client-golden-architecture/output-opus-4-7.json`
 
